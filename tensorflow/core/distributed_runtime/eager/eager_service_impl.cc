@@ -57,9 +57,10 @@ namespace tensorflow {
 namespace eager {
 
 namespace {
-Status GetNumRetvals(tensorflow::EagerContext* context, const string& op_name,
-                     const google::protobuf::Map<string, tensorflow::AttrValue>& attrs,
-                     int* num_retvals) {
+Status GetNumRetvals(
+    tensorflow::EagerContext* context, const string& op_name,
+    const google::protobuf::Map<string, tensorflow::AttrValue>& attrs,
+    int* num_retvals) {
   const tensorflow::OpRegistrationData* op_reg_data = nullptr;
   auto status = tensorflow::OpRegistry::Global()->LookUp(op_name, &op_reg_data);
   if (errors::IsNotFound(status)) {
@@ -548,6 +549,9 @@ Status EagerServiceImpl::ExecuteOp(CallOptions* call_opts,
   }
 
   absl::FixedArray<tensorflow::TensorHandle*> retvals(num_retvals);
+  std::cout << "EagerServiceImpl::ExecuteOp "
+            << "ServerContext: Calling EagerExecute for op " << operation.id()
+            << std::endl;
   VLOG(3) << "ServerContext: Calling EagerExecute for op " << operation.id();
   TF_RETURN_IF_ERROR(op.Execute(
       absl::MakeSpan(
@@ -579,6 +583,9 @@ Status EagerServiceImpl::Enqueue(CallOptions* call_opts,
             "EagerService:Enqueue#debug_str=", request->DebugString(), "#");
       },
       profiler::TraceMeLevel::kInfo);
+  std::cout << absl::StrCat("EagerService:Enqueue#debug_str=",
+                            request->DebugString(), "#")
+            << std::endl;
   ServerContext* context = nullptr;
   TF_RETURN_IF_ERROR(GetServerContext(request->context_id(), &context));
   core::ScopedUnref context_unref(context);

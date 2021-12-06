@@ -1201,6 +1201,8 @@ void OpKernelRegistrar::InitInternal(const KernelDef* kernel_def,
   // registration mechanism, we have this workaround here.
   auto global_registry =
       reinterpret_cast<KernelRegistry*>(GlobalKernelRegistry());
+  // std::cerr << "registering: " << key << " @ " << kernel_class_name
+  //           << std::endl;
   mutex_lock l(global_registry->mu);
   global_registry->registry.emplace(
       key,
@@ -1246,9 +1248,20 @@ Status FindKernelRegistration(
   const string& label = GetKernelLabelAttr(node_attrs);
 
   const string key = Key(node_op, device_type, label);
+
+  // my debug bullshit
+  // std::cout << "regesistry key " << key << std::endl;
   auto typed_registry = GlobalKernelRegistryTyped();
   tf_shared_lock lock(typed_registry->mu);
   auto regs = typed_registry->registry.equal_range(key);
+  // for (auto iter = typed_registry->registry.begin();
+  //      iter != typed_registry->registry.end(); ++iter) {
+  //   std::cout << iter->first << " : " << iter->second.kernel_class_name << '
+  //   '
+  //             << iter->second.def.op() << ' ' <<
+  //             iter->second.def.device_type()
+  //             << ' ' << iter->second.def.label() << std::endl;
+  // }
   for (auto iter = regs.first; iter != regs.second; ++iter) {
     // If there is a kernel registered for the op and device_type,
     // check that the attrs match.
@@ -1257,6 +1270,9 @@ Status FindKernelRegistration(
     if (match) {
       if (*reg != nullptr) {
         if ((*reg)->def.priority() == iter->second.def.priority()) {
+          std::cout << (*reg)->def.op() << ";" << (*reg)->kernel_class_name
+                    << " : " << iter->second.def.op() << ";"
+                    << iter->second.kernel_class_name << std::endl;
           return errors::InvalidArgument(
               "Multiple OpKernel registrations match NodeDef at the same "
               "priority '",
@@ -1264,6 +1280,9 @@ Status FindKernelRegistration(
                                     experimental_debug_info),
               "': '", (*reg)->def.ShortDebugString(), "' and '",
               iter->second.def.ShortDebugString(), "'");
+          // "': '", (*reg)->def.DebugString(), 'prio: ',
+          // (*reg)->def.priority(), "' and '", iter->second.def.DebugString(),
+          // 'prio: ', iter->second.def.priority(), "'");
         } else if ((*reg)->def.priority() > iter->second.def.priority()) {
           continue;
         }

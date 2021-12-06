@@ -107,7 +107,6 @@ Status XlaCompileOnDemandOp::Compile(
     OpKernelContext* ctx, const XlaCompiler::CompilationResult** result,
     XlaCompilationCache** cache, ResourceVarsSnapshot* variable_args,
     xla::LocalExecutable** executable) {
-
   std::vector<int> constant_input_indices;
   TF_RETURN_IF_ERROR(GetCompileTimeConstInputs(
       &ctx->op_kernel(), &constant_input_indices, ctx->function_library()));
@@ -160,6 +159,8 @@ Status XlaCompileOnDemandOp::Compile(
     TF_RETURN_IF_ERROR(args.status());
   }
 
+  std::cout << "XlaCompileOnDemandOp::Compile" << std::endl;
+
   return (*cache)->CompileSingleOp(options, *args, ctx, compile_options, result,
                                    executable);
 }
@@ -169,6 +170,8 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
   xla::LocalExecutable* executable;
   ResourceVarsSnapshot variable_args;
   XlaCompilationCache* cache;
+
+  std::cout << "XlaCompileOnDemandOp::Compute" << std::endl;
   OP_REQUIRES(ctx, ctx->function_library(),
               errors::Internal("Function library missing"));
   OP_REQUIRES_OK(ctx,

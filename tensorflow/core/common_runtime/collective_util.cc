@@ -102,6 +102,7 @@ Status ComputeBinOp(OpKernelContext* op_ctx, OpKernelContext::Params* params,
   // the Op itself.
   // TODO(ayushd, tucker): Is it possible to cache and reuse these objects?
   // They're mostly identical inside one device execution.
+  std::cout << "ComputeBinOP" << std::endl;
   std::unique_ptr<SubContext> sub_ctx(
       new SubContext(op_ctx, params, op, output, input));
   device->Compute(op, sub_ctx->sub_ctx_.get());

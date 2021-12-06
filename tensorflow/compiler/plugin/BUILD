@@ -35,10 +35,12 @@ package(
     licenses = ["notice"],
 )
 
+
+# maybe later
 cc_library(
     name = "plugin",
     deps = [
-        #"//tensorflow/compiler/plugin/example:example_lib",
+        "//tensorflow/compiler/plugin/aluminum_shark:aluminum_shark_plugin",
     ],
 )
 

@@ -64,10 +64,11 @@ limitations under the License.
 #if !defined(IS_MOBILE_PLATFORM)
 #include "tensorflow/core/distributed_runtime/eager/eager_client.h"
 #include "tensorflow/core/distributed_runtime/eager/remote_copy_node.h"
-#include "tensorflow/core/distributed_runtime/eager/remote_mgr.h"
 #include "tensorflow/core/distributed_runtime/eager/remote_execute_node.h"
+#include "tensorflow/core/distributed_runtime/eager/remote_mgr.h"
 #include "tensorflow/core/protobuf/remote_tensor_handle.pb.h"
 #endif  // IS_MOBILE_PLATFORM
+#include "tensorflow/core/common_runtime/eager/eager_op_rewrite_registry.h"
 #include "tensorflow/core/framework/step_stats.pb.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/types.h"
@@ -78,7 +79,6 @@ limitations under the License.
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/util/ptr_util.h"
-#include "tensorflow/core/common_runtime/eager/eager_op_rewrite_registry.h"
 
 #ifdef INTEL_MKL
 #include "tensorflow/core/graph/mkl_graph_util.h"
@@ -1014,7 +1014,7 @@ Status CreateUnshapedOutput(
 #if defined(IS_MOBILE_PLATFORM)
   return errors::Unimplemented(
       "Remote outputs are not available on mobile devices.");
-#else  // !IS_MOBILE_PLATFORM
+#else   // !IS_MOBILE_PLATFORM
   int64_t op_id;
   if (remote_func_params.has_value()) {
     op_id = remote_func_params.value().op_id;
@@ -1057,7 +1057,7 @@ Status AddOrExecuteNode(core::RefCountPtr<KernelAndDevice> kernel,
 #if defined(IS_MOBILE_PLATFORM)
     return errors::Unimplemented(
         "Cross-process functions are not supported on mobile devices.");
-#else  // !IS_MOBILE_PLATFORM
+#else   // !IS_MOBILE_PLATFORM
     const int64_t op_id = ctx.RemoteMgr()->NextOpId();
     remote_func_params =
         EagerRemoteFunctionParams{op_id, /*step_id=*/absl::nullopt};
@@ -1103,6 +1103,7 @@ Status AddOrExecuteNode(core::RefCountPtr<KernelAndDevice> kernel,
                      op->GetCancellationManager(),
                      {retvals, static_cast<size_t>(num_outputs)},
                      op->GetStackTrace());
+    std::cout << "AddOrExecuteNode" << std::endl;
     Status s = executor.SyncExecute(&node);
     // We release the inputs AFTER executing the operation in sync mode since
     // ExecuteNode does not increment the reference count and thus does not have
@@ -1135,6 +1136,7 @@ Status EagerLocalExecute(EagerOperation* op, TensorHandle** retvals,
   profiler::TraceMe activity(
       [&] { return absl::StrCat("EagerLocalExecute: ", op->Name()); },
       profiler::TraceMeLevel::kInfo);
+  std::cout << absl::StrCat("EagerLocalExecute: ", op->Name()) << std::endl;
   EagerContext& ctx = op->EagerContext();
   auto& executor = op->Executor();
   TF_RETURN_IF_ERROR(executor.status());
@@ -1465,7 +1467,7 @@ Status GetKernelOutputs(
 #if defined(IS_MOBILE_PLATFORM)
         return errors::Unimplemented(
             "Remote outputs are not available on mobile devices.");
-#else  // !IS_MOBILE_PLATFORM
+#else   // !IS_MOBILE_PLATFORM
         TF_RETURN_IF_ERROR(retvals[i]->SetRemoteShape(
             absl::get<TensorShape>(ret), retvals[i]->device(),
             ctx->GetContextViewId()));
@@ -1506,7 +1508,7 @@ Status EagerExecute(EagerOperation* op, TensorHandle** retvals,
   profiler::TraceMe activity(
       [&] { return absl::StrCat("EagerExecute: ", op->Name()); },
       profiler::TraceMeLevel::kInfo);
-
+  std::cout << absl::StrCat("EagerExecute: ", op->Name()) << std::endl;
   if (!op->Executor().Async()) {
     // In sync mode, always clear error to maintain the same behavior as before.
     // TODO(b/141004939): Remove this.
@@ -1562,6 +1564,7 @@ Status EagerKernelExecute(
   if (ctx->GetDistributedManager() != nullptr)
     coord_agent = ctx->GetDistributedManager()->GetCoordinationServiceAgent();
 #endif  // !IS_MOBILE_PLATFORM
+  std::cout << "EagerKernelExecute" << std::endl;
   TF_RETURN_IF_ERROR(kernel->Run(container, inputs, &outputs,
                                  cancellation_manager, remote_func_params,
                                  stack_trace, coord_agent));
@@ -1585,6 +1588,7 @@ namespace {
 Status LocalEagerCopyToDevice(TensorHandle* h, EagerContext* ctx,
                               EagerExecutor* executor, Device* dstd,
                               bool mirror, TensorHandle** result) {
+  std::cout << "LocalEagerCopyToDevice" << std::endl;
   TF_RETURN_IF_ERROR(executor->status());
   Device* d = ctx->CanonicalDevice(dstd);
   if (mirror && h->HasLocalMirror(d)) {

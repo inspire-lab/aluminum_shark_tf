@@ -1,0 +1,132 @@
+2021-10-15 14:56:59.803320: I tensorflow/core/platform/cloud/gcs_file_system.cc:805] GCS cache max size = 0 ; block size = 67108864 ; max staleness = 0
+2021-10-15 14:56:59.803403: I ./tensorflow/core/platform/cloud/ram_file_block_cache.h:64] GCS file block cache is disabled
+2021-10-15 14:56:59.803414: I tensorflow/core/platform/cloud/gcs_file_system.cc:845] GCS DNS cache is disabled, because GCS_RESOLVE_REFRESH_SECS = 0 (or is not set)
+2021-10-15 14:56:59.803418: I tensorflow/core/platform/cloud/gcs_file_system.cc:875] GCS additional header DISABLED. No environment variable set.
+running platform init
+platform: AluminumShark
+device: AluminumShark
+2021-10-15 14:56:59.829020: I tensorflow/core/platform/cloud/gcs_file_system.cc:805] GCS cache max size = 0 ; block size = 67108864 ; max staleness = 0
+2021-10-15 14:56:59.829077: I ./tensorflow/core/platform/cloud/ram_file_block_cache.h:64] GCS file block cache is disabled
+2021-10-15 14:56:59.829085: I tensorflow/core/platform/cloud/gcs_file_system.cc:845] GCS DNS cache is disabled, because GCS_RESOLVE_REFRESH_SECS = 0 (or is not set)
+2021-10-15 14:56:59.829089: I tensorflow/core/platform/cloud/gcs_file_system.cc:875] GCS additional header DISABLED. No environment variable set.
+2021-10-15 14:57:00.784945: I tensorflow/core/platform/cpu_feature_guard.cc:151] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  SSE3 SSE4.1 SSE4.2 AVX AVX2 FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2021-10-15 14:57:00.794466: I tensorflow/compiler/jit/xla_device.cc:221] Created XLA device XLA_HE 0 0x4bc6600
+2021-10-15 14:57:00.794522: I tensorflow/compiler/jit/xla_device.cc:223] XlaDevice options: use_multiple_streams: 0 use_global_compute_stream: 0
+2021-10-15 14:57:00.794654: I tensorflow/compiler/xla/service/platform_util.cc:180] Initializing devices
+2021-10-15 14:57:00.794758: I tensorflow/compiler/xla/service/platform_util.cc:197] Started device init 0
+2021-10-15 14:57:00.794868: I tensorflow/compiler/xla/service/platform_util.cc:209] Finished device init 0
+2021-10-15 14:57:00.794932: I tensorflow/compiler/xla/service/platform_util.cc:214] Device initialization complete
+2021-10-15 14:57:00.794967: I tensorflow/compiler/xla/service/service.cc:171] XLA service 0x25c2870 initialized for platform AluminumShark (this does not guarantee that XLA will be used). Devices:
+2021-10-15 14:57:00.794979: I tensorflow/compiler/xla/service/service.cc:179]   StreamExecutor device (0): AluminumShark, <undefined>
+2021-10-15 14:57:00.795049: I tensorflow/stream_executor/stream.cc:256] [stream=0x272a240,impl=0x4bc56c0] Called Stream::Stream(parent=0x7fee1c001970)
+2021-10-15 14:57:00.795069: I tensorflow/stream_executor/stream.cc:298] [stream=0x272a240,impl=0x4bc56c0] Called Stream::Init()
+2021-10-15 14:57:00.795091: I tensorflow/compiler/xla/service/stream_pool.cc:46] [stream=0x272a240,impl=0x4bc56c0] StreamPool created new stream
+2021-10-15 14:57:00.795097: I tensorflow/compiler/jit/xla_device.cc:294] XlaDevice 0x4bc6600 new stream [stream=0x272a240,impl=0x4bc56c0]
+2021-10-15 14:57:00.795103: I tensorflow/compiler/jit/xla_device.cc:377] XlaDevice 0x4bc6600 new XlaDeviceContext(fast_mem=false) 0x4190c90
+2021-10-15 14:57:00.795107: I tensorflow/compiler/jit/xla_device.cc:384] XlaDevice 0x4bc6600 new XlaDeviceContext(fast_mem=true) 0x25c73c0
+2021-10-15 14:57:00.795111: I tensorflow/compiler/jit/xla_device.cc:400] XlaDevice 0x4bc6600 new GpuDeviceInfo 0x4c30a70
+2021-10-15 14:57:00.795155: I tensorflow/compiler/xla/parse_flags_from_env.cc:199] For env var TF_XLA_FLAGS found arguments:
+2021-10-15 14:57:00.795161: I tensorflow/compiler/xla/parse_flags_from_env.cc:201]   argv[0] = <argv[0]>
+2021-10-15 14:57:00.795165: I tensorflow/compiler/jit/xla_cpu_device.cc:54] Not creating XLA devices, tf_xla_enable_xla_devices not set
+2021-10-15 14:57:00.795187: I tensorflow/compiler/jit/xla_device.cc:238] Destroying XLA device XLA_HE 0x4bc6600
+2021-10-15 14:57:00.795284: I tensorflow/compiler/xla/service/stream_pool.cc:57] [stream=0x272a240,impl=0x4bc56c0] StreamPool returning ok stream
+2021-10-15 14:57:00.795662: I tensorflow/compiler/jit/xla_cpu_device.cc:41] Not creating XLA devices, tf_xla_enable_xla_devices not set
+2021-10-15 14:57:00.795852: I tensorflow/compiler/jit/xla_device.cc:221] Created XLA device XLA_HE 0 0x4bc6600
+2021-10-15 14:57:00.795863: I tensorflow/compiler/jit/xla_device.cc:223] XlaDevice options: use_multiple_streams: 0 use_global_compute_stream: 0
+2021-10-15 14:57:00.795931: I tensorflow/compiler/xla/service/stream_pool.cc:32] [stream=0x272a240,impl=0x4bc56c0] StreamPool reusing existing stream
+2021-10-15 14:57:00.795946: I tensorflow/compiler/jit/xla_device.cc:294] XlaDevice 0x4bc6600 new stream [stream=0x272a240,impl=0x4bc56c0]
+2021-10-15 14:57:00.795952: I tensorflow/compiler/jit/xla_device.cc:377] XlaDevice 0x4bc6600 new XlaDeviceContext(fast_mem=false) 0x4190c90
+2021-10-15 14:57:00.795957: I tensorflow/compiler/jit/xla_device.cc:384] XlaDevice 0x4bc6600 new XlaDeviceContext(fast_mem=true) 0x4585a20
+2021-10-15 14:57:00.795962: I tensorflow/compiler/jit/xla_device.cc:400] XlaDevice 0x4bc6600 new GpuDeviceInfo 0x4696320
+2021-10-15 14:57:00.795968: I tensorflow/compiler/jit/xla_cpu_device.cc:54] Not creating XLA devices, tf_xla_enable_xla_devices not set
+2021-10-15 14:57:00.796029: I tensorflow/core/common_runtime/process_util.cc:159] Direct session inter op parallelism threads: 16
+2021-10-15 14:57:00.829867: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831211: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831260: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831276: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831324: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831334: I tensorflow/core/framework/op.cc:80] NOT_FOUND: Op type not registered '__inference_f_6' in binary running on zoidberg. Make sure the Op and Kernel are registered in the binary running in this process. Note that if you are loading a saved graph which used ops from tf.contrib, accessing (e.g.) `tf.contrib.resampler` should be done before importing the graph, as contrib ops are lazily registered when the module is first accessed.
+2021-10-15 14:57:00.831554: I tensorflow/core/common_runtime/eager/execute.cc:1168] Executing op __inference_f_6 in device /job:localhost/replica:0/task:0/device:XLA_HE:0
+2021-10-15 14:57:00.831677: I tensorflow/core/common_runtime/constant_folding.cc:634] Constant foldable 5 : 6
+2021-10-15 14:57:00.831686: I tensorflow/core/common_runtime/graph_runner.cc:117] Cannot run on: CPU with a function library for a XLA_HE device.
+2021-10-15 14:57:00.831754: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node _SOURCE}} = NoOp[]()
+2021-10-15 14:57:00.831766: I tensorflow/core/framework/op_kernel.cc:1310] No device-specific kernels found for NodeDef '{{node _SOURCE}}'Will fall back to a default kernel.
+
+2021-10-15 14:57:00.831770: I tensorflow/core/framework/op_kernel.cc:1310] No device-specific kernels found for NodeDef '{{node _SOURCE}}'Will fall back to a default kernel.
+
+2021-10-15 14:57:00.831797: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node Square/x}} = Const[dtype=DT_INT32, value=Tensor<type: int32 shape: [] values: 2>]()
+2021-10-15 14:57:00.831814: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node Square}} = Square[T=DT_INT32](Square/x)
+2021-10-15 14:57:00.831826: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node Identity}} = Identity[T=DT_INT32](Square)
+2021-10-15 14:57:00.831839: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node _send_Identity_0}} = _Send[T=DT_INT32, client_terminated=true, recv_device="/device:CPU:0", send_device="/device:CPU:0", send_device_incarnation=6928389867498686422, tensor_name="Identity:0"](Identity)
+2021-10-15 14:57:00.831901: I tensorflow/core/common_runtime/executor.cc:777] Process node: 0 step -1 {{node _SOURCE}} = NoOp[]() device: /device:CPU:0
+2021-10-15 14:57:00.831914: I tensorflow/core/common_runtime/executor.cc:777] Process node: 2 step -1 {{node Square/x}} = Const[dtype=DT_INT32]() device: /device:CPU:0
+2021-10-15 14:57:00.831918: I tensorflow/core/common_runtime/executor.cc:777] Process node: 3 step -1 {{node Square}} = Square[T=DT_INT32](Square/x) device: /device:CPU:0
+2021-10-15 14:57:00.831935: I tensorflow/core/common_runtime/executor.cc:777] Process node: 4 step -1 {{node Identity}} = Identity[T=DT_INT32](Square) device: /device:CPU:0
+2021-10-15 14:57:00.831942: I tensorflow/core/common_runtime/executor.cc:777] Process node: 5 step -1 {{node _send_Identity_0}} = _Send[T=DT_INT32, client_terminated=true, recv_device="/device:CPU:0", send_device="/device:CPU:0", send_device_incarnation=6928389867498686422, tensor_name="Identity:0"](Identity) device: /device:CPU:0
+2021-10-15 14:57:00.832022: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node _SOURCE}} = NoOp[]()
+2021-10-15 14:57:00.832039: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node Square/x}} = Const[dtype=DT_INT32, value=Tensor<type: int32 shape: [] values: 2>]()
+2021-10-15 14:57:00.832057: I tensorflow/core/framework/op_kernel.cc:1558] Instantiating kernel for node: {{node Square}} = Square[T=DT_INT32](Square/x)
+2.7.0
+[name: "/device:CPU:0"
+device_type: "CPU"
+memory_limit: 268435456
+locality {
+}
+incarnation: 1151281149559000802
+xla_global_id: -1
+, name: "/device:XLA_HE:0"
+device_type: "XLA_HE"
+memory_limit: 17179869184
+locality {
+}
+incarnation: 8921624900343697793
+physical_device_desc: "device: XLA_HE device"
+xla_global_id: -1
+]
+Traceback (most recent call last):
+  File "/home/robert/workspace/aluminum_shark/messing_around/test_plugin.py", line 20, in <module>
+    print("on AS", f(2))
+  File "/home/robert/.local/lib/python3.8/site-packages/tensorflow/python/util/traceback_utils.py", line 153, in error_handler
+    raise e.with_traceback(filtered_tb) from None
+  File "/home/robert/.local/lib/python3.8/site-packages/tensorflow/python/eager/execute.py", line 58, in quick_execute
+    tensors = pywrap_tfe.TFE_Py_Execute(ctx._handle, device_name, op_name,
+tensorflow.python.framework.errors_impl.InvalidArgumentError: Multiple OpKernel registrations match NodeDef at the same priority '{{node Square}}': 'op: "Square"
+device_type: "XLA_HE"
+constraint {
+  name: "T"
+  allowed_values {
+    list {
+      type: DT_FLOAT
+      type: DT_DOUBLE
+      type: DT_INT32
+      type: DT_INT16
+      type: DT_INT8
+      type: DT_INT64
+      type: DT_BFLOAT16
+      type: DT_HALF
+    }
+  }
+}
+17688970560' and 'op: "Square"
+device_type: "XLA_HE"
+constraint {
+  name: "T"
+  allowed_values {
+    list {
+      type: DT_FLOAT
+      type: DT_DOUBLE
+      type: DT_INT32
+      type: DT_INT16
+      type: DT_INT8
+      type: DT_INT64
+      type: DT_BFLOAT16
+      type: DT_HALF
+    }
+  }
+}
+17688970560'
+	 when instantiating Square
+	 [[Square]] [Op:__inference_f_6]
+2021-10-15 14:57:00.990832: I tensorflow/compiler/jit/xla_device.cc:238] Destroying XLA device XLA_HE 0x4bc6600
+2021-10-15 14:57:00.990984: I tensorflow/compiler/xla/service/stream_pool.cc:57] [stream=0x272a240,impl=0x4bc56c0] StreamPool returning ok stream

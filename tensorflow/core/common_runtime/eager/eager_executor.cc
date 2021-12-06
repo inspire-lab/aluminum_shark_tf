@@ -113,6 +113,7 @@ Status EagerExecutor::SyncExecute(EagerNode* node) {
     return s;
   }
 
+  std::cout << "EagerExecutor::SyncExecute" << std::endl;
   // Inline execution in sync mode.
   s = node->Run();
   tensorflow::mutex_lock l(node_queue_mutex_);
@@ -378,6 +379,8 @@ Status EagerExecutor::RunItem(core::RefCountPtr<NodeItem> item,
 
   AsyncEagerNode* async_node = item->node->AsAsync();
   if (async_node == nullptr) {
+    std::cout << "EagerExecutor::RunItem; Running Node: [id " << item->id
+              << "] " << item->node->DebugString() << std::endl;
     tensorflow::Status status = item->node->Run();
     NodeDone(item, status, from_queue);
     return status;

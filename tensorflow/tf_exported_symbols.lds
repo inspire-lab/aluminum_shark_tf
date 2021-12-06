@@ -12,3 +12,4 @@
 *PyInit_*
 *SE_*
 *SP_*
+*aluminum_shark*

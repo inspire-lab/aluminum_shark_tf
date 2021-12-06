@@ -252,6 +252,7 @@ Status KernelAndDeviceOp::Run(
     const absl::optional<EagerRemoteFunctionParams>& remote_func_params,
     const absl::optional<ManagedStackTrace>& stack_trace,
     CoordinationServiceAgent* coordination_service_agent) {
+  std::cout << "KernelAndDeviceOp::Run" << std::endl;
   OpKernelContext::Params params;
   params.device = device_;
   params.frame_iter = FrameAndIter(0, 0);

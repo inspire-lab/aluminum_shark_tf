@@ -121,6 +121,7 @@ class ExecuteNode : public EagerNode {
       }
       ++i;
     }
+    std::cout << "ExecuteNode::Run" << std::endl;
     return EagerKernelExecute(ctx_, inputs_, remote_func_params_, kernel_,
                               graph_collector_, cancellation_manager_, retvals_,
                               stack_trace_);

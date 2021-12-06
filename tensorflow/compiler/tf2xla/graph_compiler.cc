@@ -167,6 +167,8 @@ Status GraphCompiler::Compile() {
       tensor_inputs_.at(e->dst_input()) = src_outputs.at(e->src_output());
     }
 
+    std::cout << "GraphCompiler::Compile" << std::endl;
+
     OpKernelContext op_context(&params, n->num_outputs());
     VLOG(3) << "Translating " << params.op_kernel->name();
     if (IsFunctionCall(*flib_->GetFunctionLibraryDefinition(), *n)) {

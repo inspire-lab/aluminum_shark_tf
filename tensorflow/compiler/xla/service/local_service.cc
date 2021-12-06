@@ -157,9 +157,12 @@ LocalService::CompileExecutables(
       se::StreamExecutor * executor,
       execute_backend_->stream_executor(build_options.device_ordinal()));
 
-  // TODO(cjfj): Investigate why there are a couple of test failures when the
-  // single partition computations are built using `BuildExecutables`, fix it,
-  // and remove this special case (provided the performance if similar).
+  std::cout << "LocalService: CompileExecutables" << std::endl;
+
+  // TODO(cjfj): Investigate why there are a couple of test failures when
+  // the single partition computations are built using `BuildExecutables`,
+  // fix it, and remove this special case (provided the performance if
+  // similar).
   if (build_options.num_partitions() == 1) {
     TF_ASSIGN_OR_RETURN(std::unique_ptr<Executable> executable,
                         BuildExecutable(proto, std::move(module_config),

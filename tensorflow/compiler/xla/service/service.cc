@@ -748,6 +748,12 @@ StatusOr<std::unique_ptr<Executable>> Service::BuildExecutable(
       "BuildExecutable on service %p with serialized module proto: %s", this,
       module_proto.name());
 
+  std::cout
+      << StrFormat(
+             "BuildExecutable on service %p with serialized module proto: %s",
+             this, module_proto.name())
+      << " and device " << backend->device_name(0) << std::endl;
+
   TF_ASSIGN_OR_RETURN(
       std::unique_ptr<HloModule> module,
       CreateModuleFromProto(module_proto, *module_config, run_backend_only));

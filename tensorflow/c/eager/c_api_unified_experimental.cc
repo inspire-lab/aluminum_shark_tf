@@ -227,6 +227,7 @@ void TF_ExecuteOperation(TF_AbstractOp* op, int num_inputs,
     }
   }
   int num_outputs = unwrap(o)->expected_num_outputs;
+  std::cout << "TF_ExecuteOperation" << std::endl;
   Set_TF_Status_from_Status(
       s, unwrap(op)->Execute(
              absl::MakeSpan(reinterpret_cast<AbstractTensorHandle**>(

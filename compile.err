@@ -1,0 +1,66 @@
+INFO: Options provided by the client:
+  Inherited 'common' options: --isatty=0 --terminal_columns=80
+INFO: Reading rc options for 'build' from /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc:
+  Inherited 'common' options: --experimental_repo_remote_exec
+INFO: Reading rc options for 'build' from /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc:
+  'build' options: --define framework_shared_object=true --java_toolchain=@tf_toolchains//toolchains/java:tf_java_toolchain --host_java_toolchain=@tf_toolchains//toolchains/java:tf_java_toolchain --define=use_fast_cpp_protos=true --define=allow_oversize_protos=true --spawn_strategy=standalone -c opt --announce_rc --define=grpc_no_ares=true --noincompatible_remove_legacy_whole_archive --enable_platform_specific_config --define=with_xla_support=true --config=short_logs --config=v2 --define=no_aws_support=true --define=no_hdfs_support=true
+INFO: Reading rc options for 'build' from /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.tf_configure.bazelrc:
+  'build' options: --action_env PYTHON_BIN_PATH=/usr/bin/python --action_env PYTHON_LIB_PATH=/usr/lib/python3/dist-packages --python_path=/usr/bin/python --define=with_xla_support=true
+INFO: Found applicable config definition build:short_logs in file /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc: --output_filter=DONT_MATCH_ANYTHING
+INFO: Found applicable config definition build:v2 in file /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc: --define=tf_api_version=2 --action_env=TF2_BEHAVIOR=1
+INFO: Found applicable config definition build:linux in file /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc: --copt=-w --host_copt=-w --define=PREFIX=/usr --define=LIBDIR=$(PREFIX)/lib --define=INCLUDEDIR=$(PREFIX)/include --define=PROTOBUF_INCLUDE_PATH=$(PREFIX)/include --cxxopt=-std=c++14 --host_cxxopt=-std=c++14 --config=dynamic_kernels --distinct_host_configuration=false --experimental_guard_against_concurrent_changes
+INFO: Found applicable config definition build:dynamic_kernels in file /home/robert/workspace/aluminum_shark/dependencies/tensorflow/.bazelrc: --define=dynamic_loaded_kernels=true --copt=-DAUTOLOAD_DYNAMIC_KERNELS
+Loading: 
+Loading: 0 packages loaded
+Analyzing: target //tensorflow/tools/pip_package:build_pip_package (0 packages loaded, 0 targets configured)
+INFO: Analyzed target //tensorflow/tools/pip_package:build_pip_package (0 packages loaded, 0 targets configured).
+INFO: Found 1 target...
+[0 / 1] [Prepa] BazelWorkspaceStatusAction stable-status.txt
+[1 / 770] Compiling tensorflow/core/framework/op_kernel.cc; 1s local
+[2 / 770] [Prepa] Linking tensorflow/libtensorflow_framework.so.2.7.0
+[152 / 770] [Sched] Linking tensorflow/compiler/tf2xla/ops/_xla_ops.so ... (16 actions, 2 running)
+[176 / 760] [Sched] Linking tensorflow/python/gen_linalg_ops_py_wrappers_cc ... (15 actions, 3 running)
+[206 / 744] [Sched] Linking tensorflow/python/user_ops/gen_user_ops_py_wrappers_cc ... (16 actions, 4 running)
+[242 / 726] [Sched] Linking tensorflow/python/gen_nccl_ops_py_wrappers_cc ... (16 actions, 3 running)
+[281 / 707] [Sched] Linking tensorflow/cc/ops/logging_ops_gen_cc ... (16 actions, 3 running)
+[586 / 670] [Sched] Linking tensorflow/python/gen_encode_proto_ops_py_wrappers_cc ... (6 actions, 4 running)
+[595 / 666] Linking tensorflow/python/_pywrap_tensorflow_internal.so; 2s local
+[598 / 666] [Prepa] Linking tensorflow/python/framework/_dtypes.so
+[613 / 666] [Sched] Linking tensorflow/python/client/_pywrap_tf_session.so ... (16 actions, 3 running)
+[633 / 666] [Sched] Linking tensorflow/python/util/_pywrap_stat_summarizer.so ... (12 actions, 3 running)
+Target //tensorflow/tools/pip_package:build_pip_package up-to-date:
+  bazel-bin/tensorflow/tools/pip_package/build_pip_package
+INFO: Elapsed time: 37.115s, Critical Path: 20.51s
+INFO: 390 processes: 146 internal, 244 local.
+INFO: Build completed successfully, 390 total actions
+INFO: Build completed successfully, 390 total actions
+Wed Oct 13 17:48:03 MDT 2021 : === Preparing sources in dir: /tmp/tmp.b3pGb3Ic5C
+~/workspace/aluminum_shark/dependencies/tensorflow ~/workspace/aluminum_shark/dependencies/tensorflow
+~/workspace/aluminum_shark/dependencies/tensorflow
+~/workspace/aluminum_shark/dependencies/tensorflow/bazel-bin/tensorflow/tools/pip_package/build_pip_package.runfiles/org_tensorflow ~/workspace/aluminum_shark/dependencies/tensorflow
+~/workspace/aluminum_shark/dependencies/tensorflow
+/tmp/tmp.b3pGb3Ic5C/tensorflow/include ~/workspace/aluminum_shark/dependencies/tensorflow
+~/workspace/aluminum_shark/dependencies/tensorflow
+Wed Oct 13 17:48:14 MDT 2021 : === Building wheel
+warning: no files found matching 'README'
+warning: no files found matching '*.pyd' under directory '*'
+warning: no files found matching '*.pyi' under directory '*'
+warning: no files found matching '*.pd' under directory '*'
+warning: no files found matching '*.dylib' under directory '*'
+warning: no files found matching '*.dll' under directory '*'
+warning: no files found matching '*.lib' under directory '*'
+warning: no files found matching '*.csv' under directory '*'
+warning: no files found matching '*.h' under directory 'tensorflow/include/tensorflow'
+warning: no files found matching '*.proto' under directory 'tensorflow/include/tensorflow'
+warning: no files found matching '*' under directory 'tensorflow/include/third_party'
+Wed Oct 13 17:48:39 MDT 2021 : === Output wheel file is in: /tmp/tensorflow_pkg
+Defaulting to user installation because normal site-packages is not writeable
+Processing /tmp/tensorflow_pkg/tensorflow-2.7.0-cp38-cp38-linux_x86_64.whl
+Installing collected packages: tensorflow
+  Attempting uninstall: tensorflow
+    Found existing installation: tensorflow 2.7.0
+    Uninstalling tensorflow-2.7.0:
+      Successfully uninstalled tensorflow-2.7.0
+Successfully installed tensorflow-2.7.0
+WARNING: You are using pip version 21.2.4; however, version 21.3 is available.
+You should consider upgrading via the '/usr/bin/python3 -m pip install --upgrade pip' command.

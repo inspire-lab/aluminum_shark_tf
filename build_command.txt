@@ -1,0 +1,5 @@
+bazel build //tensorflow/tools/pip_package:build_pip_package
+./bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg
+pip install /tmp/tensorflow_pkg/tensorflow-2.7.0-cp38-cp38-linux_x86_64.whl --force-reinstall && pip install numpy==1.21.2
+
+import tensorflow as tf; from tensorflow.python.client import device_lib;  print(tf.__version__); print (device_lib.list_local_devices())

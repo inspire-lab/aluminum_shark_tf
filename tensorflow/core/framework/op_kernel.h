@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H_
-#define TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H_
+#ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H
+#define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H
 
 #include <functional>
 #include <unordered_set>
@@ -1705,4 +1705,5 @@ void CheckNotInComputeAsync(OpKernelContext* ctx,
 
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H_
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_CORE_FRAMEWORK_OP_KERNEL_H \
+        */

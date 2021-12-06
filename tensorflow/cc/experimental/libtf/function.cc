@@ -63,6 +63,7 @@ tensorflow::Status ExecuteFunction(
     TF_RETURN_IF_ERROR(call_op->AddInput(t));
   }
   int num_outputs = outputs.size();
+  std::cout << "ExecuteFunction " << fname << std::endl;
   return call_op->Execute(outputs, &num_outputs);
 }
 

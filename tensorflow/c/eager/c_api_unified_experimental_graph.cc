@@ -341,6 +341,7 @@ class GraphContext : public TracingContext {
     }
     int num_outputs = 1;
     std::vector<AbstractTensorHandle*> outputs(num_outputs);
+    std::cout << "AddParameter" << std::endl;
     TF_RETURN_IF_ERROR(operation->Execute(
         absl::Span<AbstractTensorHandle*>(outputs), &num_outputs));
 

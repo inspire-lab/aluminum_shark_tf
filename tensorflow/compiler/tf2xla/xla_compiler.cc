@@ -18,13 +18,13 @@ limitations under the License.
 #include <numeric>
 #include <vector>
 
-#include "tensorflow/compiler/mlir/mlir_bridge_rollout_policy.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/memory/memory.h"
 #include "absl/types/variant.h"
 #include "tensorflow/compiler/jit/defs.h"
 #include "tensorflow/compiler/jit/flags.h"
 #include "tensorflow/compiler/jit/shape_inference.h"
+#include "tensorflow/compiler/mlir/mlir_bridge_rollout_policy.h"
 #include "tensorflow/compiler/mlir/tensorflow/utils/compile_mlir_util.h"
 #include "tensorflow/compiler/mlir/utils/array_container_utils.h"
 #include "tensorflow/compiler/tf2xla/graph_compiler.h"
@@ -430,7 +430,6 @@ Status BuildComputation(
 
 }  // namespace
 
-
 string XlaCompiler::Argument::HumanString() const {
   string common;
   if (!name.empty()) {
@@ -730,6 +729,7 @@ Status XlaCompiler::CompileFunction(
   const string function_id =
       Canonicalize(fn_name_attrs.name(), AttrSlice(&fn_name_attrs.attr()));
   VLOG(1) << "XlaCompiler::CompileFunction " << function_id;
+  std::cout << "XlaCompiler::CompileFunction " << function_id << std::endl;
 
   const std::vector<XlaCompiler::Argument> arg_vector(args.begin(), args.end());
   auto it = cache_.find({function_id, arg_vector});
@@ -808,7 +808,14 @@ Status XlaCompiler::CompileFunction(
                    absl::StrCat("xla_compile_function_", function_id), *graph);
   }
 
+  std::cout << "XlaCompiler::CompileFunction: "
+            << DumpGraphToFile(
+                   absl::StrCat("xla_compile_function_", function_id), *graph)
+            << std::endl;
+
   VLOG(1) << "====================================================";
+  std::cout << "===================================================="
+            << std::endl;
   MlirBridgeRolloutPolicy policy = MlirBridgeRolloutPolicy::kDisabledByUser;
   if (options.is_entry_computation) {
     policy = GetMlirBridgeRolloutPolicy(
@@ -817,6 +824,7 @@ Status XlaCompiler::CompileFunction(
   }
   if (policy == MlirBridgeRolloutPolicy::kEnabledByUser) {
     VLOG(1) << "Using MLIR bridge to compile the function";
+    std::cout << "Using MLIR bridge to compile the function" << std::endl;
     GraphDebugInfo debug_info;
 
     std::vector<std::string> valid_control_rets =
@@ -829,11 +837,13 @@ Status XlaCompiler::CompileFunction(
         debug_info, options_.shape_representation_fn, result));
   } else {
     VLOG(1) << "Using the old bridge to compile the function";
+    std::cout << "Using the old bridge to compile the function" << std::endl;
     TF_RETURN_IF_ERROR(
         CompileGraph(options, function_id, std::move(graph), args, result));
   }
   VLOG(1) << "====================================================";
-
+  std::cout << "===================================================="
+            << std::endl;
   cache_[{function_id, arg_vector}] = *result;
   return Status::OK();
 }
@@ -1292,12 +1302,14 @@ void ConvertConstantsToExpressions(xla::XlaBuilder* builder,
 
 }  // namespace
 
-Status XlaCompiler::CompileGraph(
-    const XlaCompiler::CompileOptions& options, string const& name,
-    std::unique_ptr<Graph> graph, absl::Span<const XlaCompiler::Argument> args,
-    CompilationResult* result) {
+Status XlaCompiler::CompileGraph(const XlaCompiler::CompileOptions& options,
+                                 string const& name,
+                                 std::unique_ptr<Graph> graph,
+                                 absl::Span<const XlaCompiler::Argument> args,
+                                 CompilationResult* result) {
   VLOG(1) << "Executing graph symbolically to populate XlaBuilder.: " << name;
-
+  std::cout << "Executing graph symbolically to populate XlaBuilder.: " << name
+            << std::endl;
   TF_RETURN_IF_ERROR(PropagateConstIntoFunctionalNodes(
       graph.get(), options_.flib_def, local_flib_def_.get()));
   TF_RETURN_IF_ERROR(RearrangeFunctionArguments(
@@ -1312,6 +1324,10 @@ Status XlaCompiler::CompileGraph(
             << DumpGraphToFile(absl::StrCat("xla_compile_graph_", name), *graph,
                                flib_runtime_->GetFunctionLibraryDefinition());
   }
+  std::cout << "XlaCompiler::CompileGraph: "
+            << DumpGraphToFile(absl::StrCat("xla_compile_graph_", name), *graph,
+                               flib_runtime_->GetFunctionLibraryDefinition())
+            << std::endl;
 
   // Report the error here if initialization failed.
   TF_RETURN_IF_ERROR(initialization_status_);
@@ -1377,6 +1393,7 @@ Status XlaCompiler::CompileGraph(
                                        flib_runtime_, NextStepId());
   if (!execute_status.ok()) {
     VLOG(1) << "Failed executing graph " << name;
+    std::cout << "Failed executing graph " << name << std::endl;
     return execute_status;
   }
   if (token_input_index != -1) {
@@ -1412,9 +1429,14 @@ Status XlaCompiler::CompileGraph(
 
   VLOG(2) << "Outputs: total: " << context->retvals().size()
           << " nonconstant: " << num_nonconst_outputs;
+  std::cout << "Outputs: total: " << context->retvals().size()
+            << " nonconstant: " << num_nonconst_outputs << std::endl;
   VLOG(2) << "XLA output shape: "
           << xla::ShapeUtil::HumanStringWithLayout(result->xla_output_shape);
   result->collective_reduce_info = context->GetCollectiveReduceV2OpInfo();
+  std::cout << "XLA output shape: "
+            << xla::ShapeUtil::HumanStringWithLayout(result->xla_output_shape)
+            << std::endl;
   return Status::OK();
 }
 

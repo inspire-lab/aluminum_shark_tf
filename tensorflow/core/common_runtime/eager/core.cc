@@ -179,7 +179,7 @@ Status EagerOperation::Execute(absl::Span<AbstractTensorHandle*> retvals,
       TF_RETURN_IF_ERROR(down_cast<TensorHandle*>(handle)->WaitUnknownDevice());
     }
   }
-
+  std::cout << "EagerOperation::Execute" << std::endl;
   // Run eager placement logic.
   class Device* device = absl::get<class Device*>(Device());
   if (device == nullptr) {

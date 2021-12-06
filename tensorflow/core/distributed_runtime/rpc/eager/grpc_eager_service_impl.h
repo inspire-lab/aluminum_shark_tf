@@ -129,6 +129,7 @@ class GrpcEagerServiceImpl : public AsyncServiceInterface {
       // NOTE(fishx): Use the address of StreamingCall as the stream_id since we
       // reuse the same StreamingCall for multiple requests in the same
       // streaming connection.
+      std::cout << "StreamingEnqueueHandler" << std::endl;
       Status status = local_impl_.Enqueue(
           /*call_opts=*/nullptr, &call->request(), call->mutable_response(),
           reinterpret_cast<uint64>(static_cast<void*>(call)));

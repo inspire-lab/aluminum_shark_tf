@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H_
-#define TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H_
+#ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H
+#define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H
 
 #include <functional>
 #include <list>
@@ -663,4 +663,4 @@ template Status HloComputation::AcceptOrdered(
 
 }  // namespace xla
 
-#endif  // TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H_
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_SERVICE_HLO_COMPUTATION_H */

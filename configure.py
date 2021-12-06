@@ -1331,8 +1331,11 @@ def main():
     environ_cp['TF_NEED_TENSORRT'] = '0'
 
   with_xla_support = environ_cp.get('TF_ENABLE_XLA', None)
+  print( 'with_xla_support', with_xla_support )
   if with_xla_support is not None:
     write_to_bazelrc('build --define=with_xla_support=%s' %
+                     ('true' if int(with_xla_support) else 'false'))
+    print('build --define=with_xla_support=%s' %
                      ('true' if int(with_xla_support) else 'false'))
 
   set_action_env_var(

@@ -21,4 +21,5 @@ from __future__ import print_function
 # pylint: disable=unused-import
 from tensorflow.python.compiler.xla import jit
 from tensorflow.python.compiler.xla import xla
+from tensorflow.python.compiler.xla import aluminum_shark
 # pylint: enable=unused-import

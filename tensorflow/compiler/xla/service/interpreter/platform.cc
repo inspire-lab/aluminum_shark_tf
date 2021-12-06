@@ -16,6 +16,7 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/interpreter/platform.h"
 
 #include <utility>
+#include <iostream>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_format.h"
@@ -102,6 +103,20 @@ void XlaInterpreterPlatform::UnregisterTraceListener(TraceListener* listener) {
 static void InitializeXlaInterpreterPlatform() {
   std::unique_ptr<Platform> platform(new XlaInterpreterPlatform);
   SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
+  std::vector<stream_executor::Platform*> platforms = 
+  xla::PlatformUtil::GetSupportedPlatforms().ValueOrDie();
+  for (size_t i = 0; i < platforms.size() ; ++i) {
+    std::cout << "platform: " << platforms[ i ]->Name() << std::endl;
+    std::unique_ptr<DeviceDescription> device_desc =
+      platforms[ i ]->DescriptionForDevice(-1).ValueOrDie();
+    std::cout << "device: " << device_desc->name() << std::endl;
+  }
+
+  auto* interpr_platform = 
+    xla::PlatformUtil::GetPlatform(test_platform_name).ValueOrDie();
+
+  std::cout << "interpreter_platform: " << interpr_platform->Name() << std::endl;
+  
 }
 
 }  // namespace interpreter

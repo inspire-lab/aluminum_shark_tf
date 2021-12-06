@@ -110,6 +110,8 @@ TENSORFLOW_API_INIT_FILES = [
     "version/__init__.py",
     "xla/__init__.py",
     "xla/experimental/__init__.py",
+    "aluminum_shark/__init__.py",           # TODO move 
+    "compat/v1/aluminum_shark/__init__.py"  # TODO move
     # END GENERATED FILES
 ]
 
