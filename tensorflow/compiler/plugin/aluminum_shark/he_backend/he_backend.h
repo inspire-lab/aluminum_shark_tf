@@ -5,7 +5,18 @@
 #include <string>
 #include <vector>
 
+#define ALUMINUM_SHARK_API_VERSION "0.1.0"
+#define ALUMINUM_SHARK_API_VERSION_MAJOR 0
+#define ALUMINUM_SHARK_API_VERSION_MINOR 1
+#define ALUMINUM_SHARK_API_VERSION_PATCH 0
+
 namespace aluminum_shark {
+
+struct API_VERSION {
+  const uint8_t major = ALUMINUM_SHARK_API_VERSION_MAJOR;
+  const uint8_t minor = ALUMINUM_SHARK_API_VERSION_MINOR;
+  const uint8_t patch = ALUMINUM_SHARK_API_VERSION_PATCH;
+};
 
 enum HE_SCHEME { BFV = 0, CKKS, TFHE };
 
@@ -30,6 +41,7 @@ class HEBackend {
 
   virtual const std::string& name() = 0;
   virtual const std::string& to_string() = 0;
+  virtual const API_VERSION& api_version() = 0;
 
  private:
   std::shared_ptr<void> lib_handle_;

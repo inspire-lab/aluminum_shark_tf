@@ -6,7 +6,11 @@
 
 namespace aluminum_shark {
 
+static constexpr API_VERSION version = API_VERSION();
+
 std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path) {
+  AS_LOG_S << "Using API version: " << version.major << "." << version.minor
+           << "." << version.patch << std::endl;
   AS_LOG("Loading backend: " + lib_path);
   void* raw_p = dlopen(lib_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
   if (raw_p == 0) {
@@ -28,8 +32,13 @@ std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path) {
   }
   std::shared_ptr<HEBackend> backend = createFunc();
   backend->lib_handle_ = ptr;
-  AS_LOG("Sucessfully opened backend: " + backend->name() + " from " +
-         lib_path);
+  const API_VERSION& backend_ver = backend->api_version();
+  AS_LOG_S << "Sucessfully opened backend: " << backend->name()
+           << " API version: " << backend_ver.major << "." << backend_ver.minor
+           << "." << backend_ver.patch << " from " << lib_path << std::endl;
+  if (version.major != backend_ver.major) {
+    AS_LOG_S << "WARNING: incompatibale API versions! " << std::endl;
+  }
   return backend;
 }
 
