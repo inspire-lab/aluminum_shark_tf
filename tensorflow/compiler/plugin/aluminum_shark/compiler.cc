@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "tensorflow/compiler/plugin/aluminum_shark/dummy_data_type.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/executable.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/hlo_evaluator.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
@@ -105,24 +105,6 @@ StatusOr<std::unique_ptr<Executable>> AluminumSharkCompiler::RunBackend(
   evaluator->set_use_fast_path(
       hlo_module->config().debug_options().xla_hlo_evaluator_use_fast_path());
   evaluator->set_custom_call_handler(HandleEvaluatorCustomCall);
-
-  // create dummy data type for entry computation
-  AS_LOG("Creating DummyDataType for the entry computation");
-  aluminum_shark::DataRegistry& reg =
-      aluminum_shark::DataRegistry::getInstance();
-  aluminum_shark::PythonHandle& ph =
-      aluminum_shark::DataRegistry::getInstance();
-  HloComputation* computation = module->entry_computation();
-  for (int64_t i = 0; i < computation->num_parameters(); ++i) {
-    HloInstrunction* hlo = computation->parameter_instruction[i];
-    auto& ddt = ph.getCurrentCipherTexts();
-    AS_LOG("Mapping Hlo to DDT: " + hlo->ToString() + " -> " ddt.getName());
-    reg.put(hlo, aluminum_shark::DummyDataType(hlo->ToString()));
-    if (i > 0) {
-      AS_LOG("Currently only supporting computation with one input parameter ");
-      break;
-    }
-  }
 
   // Create executable from only the Hlo module.
   std::unique_ptr<Executable> executable =

@@ -4484,25 +4484,3 @@ py_library(
 #     deps = [":protos_all"],
 # )
 # copybara:uncomment_end
-
-# TODO move this
-tf_python_pybind_extension(
-    name = "_pywrap_aluminum_shark",
-    srcs = ["aluminum_shark_wrapper.cc"],
-    # hdrs = [
-    #     "//tensorflow/compiler/plugin/python:pywrap_mlir_hdrs",
-    # ],
-    module_name = "_pywrap_aluminum_shark",
-    deps = [
-        "//tensorflow/compiler/plugin/aluminum_shark/python:python_handle",
-        "//tensorflow/compiler/plugin/aluminum_shark:dummy_data_type",
-        # "//tensorflow/core:protos_all_cc",
-        "//tensorflow/core/platform:status",
-        "//tensorflow/python/lib/core:pybind11_lib",
-        "//tensorflow/python/lib/core:pybind11_status",
-        "//tensorflow/python/lib/core:safe_pyobject_ptr",
-        "//third_party/python_runtime:headers",
-        # "@com_google_absl//absl/strings",
-        "@pybind11",
-    ],
-)

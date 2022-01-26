@@ -2,12 +2,12 @@
 
 namespace aluminum_shark {
 
-DummyDataType& DataRegistry::get(xla::HLOInstruction* instruction) {
+Ctxt& DataRegistry::get(xla::HLOInstruction* instruction) {
   return map_[instruction];
 }
 
-void DataRegistry::put(xla::HLOInstruction* instruction, DummyDataType&& ddt) {
-  return map_[instruction] = ddt;
+void DataRegistry::put(xla::HLOInstruction* instruction, Ctxt&& ctxt) {
+  return map_[instruction] = ctxt;
 }
 
 bool exists(const xla::HLOInstruction* instruction) {

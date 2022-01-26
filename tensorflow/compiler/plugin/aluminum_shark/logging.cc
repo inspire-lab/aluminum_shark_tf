@@ -4,11 +4,12 @@
 
 #include <iostream>
 
+namespace {
 // read environment variable to see if we should be logging;
-static bool log_on =
-    std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr
-        ? false
-        : std::stoi(std::getenv("ALUMINUM_SHARK_LOGGING")) == 1;
+bool log_on = std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr
+                  ? false
+                  : std::stoi(std::getenv("ALUMINUM_SHARK_LOGGING")) == 1;
+}  // namespace
 
 namespace aluminum_shark {
 
@@ -18,6 +19,21 @@ void log(const char* file, int line, const std::string message) {
   }
   std::cout << "Aluminum Shark: " << file << ":" << line << "] " << message
             << std::endl;
+}
+
+void enable_logging(bool activate) {
+  if (!activate) {
+    AS_LOG("Logging turned off");
+  }
+  log_on = activate;
+  AS_LOG("Logging turned on");  // only is logged if it actually was turned on
+}
+
+bool log() { return log_on; }
+
+NullStream& nullstream() {
+  static NullStream nullstream;
+  return nullstream;
 }
 
 }  // namespace aluminum_shark

@@ -14,9 +14,9 @@ cc_library(
     srcs = ["aluminum_shark_transfer_manager.cc"],
     hdrs = ["aluminum_shark_transfer_manager.h"],
     deps = [
+        "//tensorflow/compiler/plugin/aluminum_shark:platform_id",
         "//tensorflow/compiler/xla/service:generic_transfer_manager",
         "//tensorflow/compiler/xla/service:transfer_manager",
-        "//tensorflow/compiler/plugin/aluminum_shark:platform_id",
         "//tensorflow/core:lib",
         "@com_google_absl//absl/memory",
     ],
@@ -31,10 +31,32 @@ cc_library(
 )
 
 cc_library(
-    name = "dummy_data_type",
-    srcs = ["dummy_data_type.cc"],
-    hdrs = ["dummy_data_type.h"],
-    deps = [":logging"],
+    name = "ptxt",
+    srcs = ["ptxt.cc"],
+    hdrs = [
+        "base_txt.h",
+        "ctxt.h",
+        "ptxt.h",
+    ],
+    deps = [
+        ":logging",
+        "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "ctxt",
+    srcs = ["ctxt.cc"],
+    hdrs = [
+        "base_txt.h",
+        "ctxt.h",
+    ],
+    deps = [
+        ":logging",
+        ":ptxt",
+        "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
+    ],
     alwayslink = 1,
 )
 
@@ -43,23 +65,22 @@ cc_library(
     srcs = ["data_registry.cc"],
     hdrs = ["data_registry.h"],
     deps = [
-        ":logging", 
-        ":dummy_data_type", 
+        ":ctxt",
+        ":logging",
         "//tensorflow/compiler/xla/service:hlo_instruction",
     ],
     alwayslink = 1,
 )
-
 
 cc_library(
     name = "compiler",
     srcs = ["compiler.cc"],
     hdrs = ["compiler.h"],
     deps = [
+        ":ctxt",
         ":executable",
-        ":platform_id",
         ":logging",
-        ":dummy_data_type",
+        ":platform_id",
         "//tensorflow/compiler/xla:status",
         "//tensorflow/compiler/xla:status_macros",
         "//tensorflow/compiler/xla:statusor",
@@ -134,11 +155,11 @@ cc_library(
     srcs = ["executable.cc"],
     hdrs = ["executable.h"],
     deps = [
+        ":ctxt",
         ":executable_base",
         ":executor",
-        ":logging",        
         ":hlo_evaluator",
-        ":dummy_data_type",
+        ":logging",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:shape_util",
         "//tensorflow/compiler/xla:status_macros",
@@ -170,8 +191,8 @@ cc_library(
     deps = [
         ":executor",
         ":platform_id",
+        "//tensorflow/compiler/xla/service:platform_util",
         "//tensorflow/core:stream_executor_headers_lib",
-        "//tensorflow/compiler/xla/service:platform_util"
     ],
     alwayslink = True,  # Registers itself with the MultiPlatformManager.
 )
@@ -196,12 +217,12 @@ cc_library(
     name = "xla_he_backend",
     srcs = ["xla_he_backend.cc"],
     hdrs = [
-         "aluminum_shark_def.h",
+        "aluminum_shark_def.h",
     ],
     deps = [
+        "//tensorflow/compiler/tf2xla",
         "//tensorflow/compiler/tf2xla:xla_op_registry",
-        "//tensorflow/compiler/tf2xla:tf2xla"
-    ]
+    ],
 )
 
 cc_library(
@@ -226,7 +247,7 @@ cc_library(
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:lib",
         "//tensorflow/compiler/jit:xla_device_no_jit_rewrite_registration",
-        ":logging"
+        ":logging",
     ],
     alwayslink = 1,
 )
@@ -266,11 +287,9 @@ cc_library(
     ],
     hdrs = ["hlo_evaluator.h"],
     deps = [
+        ":ctxt",
         ":logging",
-        "//tensorflow/compiler/xla/service:dynamic_dimension_inference",
-        "//tensorflow/compiler/xla/service:hlo",
-        "//tensorflow/compiler/xla/service:hlo_query",
-        "//tensorflow/compiler/xla/service:shape_inference",
+        "//tensorflow/compiler/plugin/aluminum_shark/python:python_handle",
         "//tensorflow/compiler/xla:array2d",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:literal_util",
@@ -280,6 +299,10 @@ cc_library(
         "//tensorflow/compiler/xla:util",
         "//tensorflow/compiler/xla:window_util",
         "//tensorflow/compiler/xla:xla_data_proto_cc",
+        "//tensorflow/compiler/xla/service:dynamic_dimension_inference",
+        "//tensorflow/compiler/xla/service:hlo",
+        "//tensorflow/compiler/xla/service:hlo_query",
+        "//tensorflow/compiler/xla/service:shape_inference",
         "//tensorflow/compiler/xla/service/cpu:runtime_single_threaded_matmul",
         "//tensorflow/core:lib",
         "//tensorflow/stream_executor/lib",
@@ -295,13 +318,11 @@ cc_library(
     ],
 )
 
-
-
 cc_library(
     name = "aluminum_shark_plugin",
     deps = [
         # ":xla_ops",
-        ":dummy_data_type",
+        ":ctxt",
         ":logging",
         ":compiler",
         ":aluminum_shark_transfer_manager",
@@ -312,5 +333,3 @@ cc_library(
     ],
     alwayslink = 1,
 )
-
-

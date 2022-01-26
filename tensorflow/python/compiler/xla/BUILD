@@ -14,7 +14,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":xla",
-        ":aluminum_shark",
         "//tensorflow/core:protos_all_py",
         "//tensorflow/python:framework_for_generated_wrappers",
         "//tensorflow/python/eager:context",
@@ -115,23 +114,3 @@ cuda_py_test(
 
 # TODO: move this stuff out of here
 
-py_library(
-    name = "aluminum_shark",
-    srcs = ["aluminum_shark.py"],
-    srcs_version = "PY3",
-    deps = [
-            "//tensorflow/python:_pywrap_aluminum_shark",
-    #     "//tensorflow/compiler/jit/ops:xla_ops_grad",
-    #     # Do not remove: required to run xla ops on Cloud.
-    #     "//tensorflow/compiler/tf2xla/python:xla",
-    #     "//tensorflow/python:array_ops",
-    #     "//tensorflow/python:control_flow_ops",
-    #     "//tensorflow/python:framework_ops",
-    #     "//tensorflow/python:platform",
-    #     "//tensorflow/python:util",
-    #     "//tensorflow/python:variable_scope",
-    #     "//tensorflow/python/distribute:summary_op_util",
-    #     "//tensorflow/python/eager:context",
-    #     "//tensorflow/python/eager:def_function",
-     ],
-)

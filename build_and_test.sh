@@ -6,7 +6,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # rund tests
-cd ../../messing_around
+cd ../../python3
 python3 test_plugin.py
 
 cd ../dependencies/tensorflow

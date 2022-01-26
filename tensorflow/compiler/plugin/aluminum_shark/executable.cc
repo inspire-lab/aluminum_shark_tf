@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "tensorflow/compiler/plugin/aluminum_shark/dummy_data_type.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/executable_base.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/executor.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
@@ -53,10 +53,11 @@ StatusOr<Literal> AluminumSharkExecutable::Evaluate(
 
   evaluator_->ResetVisitStates();
 
-  // log and copy the literals to dummy types
-  for (const auto& l : arg_literals) {
+  // create logging string
+  for (auto& l : arg_literals) {
     ss << l << ", ";
   }
+
   AS_LOG("Evaluate: " + std::to_string(arg_literals.size()) +
          " literals: " + ss.str());
   ss.str("");
@@ -75,5 +76,3 @@ StatusOr<Literal> AluminumSharkExecutable::Evaluate(
 
 }  // namespace aluminum_shark
 }  // namespace xla
-
-static aluminum_shark::DummyDataType helper();

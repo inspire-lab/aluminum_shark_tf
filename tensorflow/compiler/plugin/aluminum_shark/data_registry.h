@@ -17,12 +17,12 @@ class DataRegistry {
     return instance;
   }
 
-  DummyDataType& get(xla::HLOInstruction* instruction);
-  void put(xla::HLOInstruction* instruction, DummyDataType&& ddt);
+  Ctxt& get(xla::HLOInstruction* instruction);
+  void put(xla::HLOInstruction* instruction, Ctxt&& ddt);
   bool exists(xla::HLOInstruction* instruction);
 
  private:
-  std::map<xla::HLOInstruction*, DummyDataType> map_;
+  std::map<xla::HLOInstruction*, Ctxt> map_;
 }
 
 }  // namespace aluminum_shark

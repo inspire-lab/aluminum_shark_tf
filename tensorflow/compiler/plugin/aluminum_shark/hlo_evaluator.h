@@ -19,11 +19,17 @@ limitations under the License.
 #define _USE_MATH_DEFINES
 
 #include <functional>
+#include <map>
 #include <memory>
 
 #include "absl/container/node_hash_map.h"
 #include "absl/memory/memory.h"
 #include "absl/types/span.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/base_txt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/python/python_handle.h"
 #include "tensorflow/compiler/xla/array2d.h"
 #include "tensorflow/compiler/xla/literal.h"
 #include "tensorflow/compiler/xla/service/dfs_hlo_visitor_with_default.h"
@@ -94,9 +100,26 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   StatusOr<Literal> Evaluate(const HloComputation& computation,
                              absl::Span<const Literal> arg_literals) {
     std::vector<const Literal*> arg_literal_ptrs;
+
+    // take the ctxt passed in from python and map them to literals
+    AS_LOG("Creating Ctxts for the input paramets");
+    ::aluminum_shark::PythonHandle& ph =
+        ::aluminum_shark::PythonHandle::getInstance();
+    const std::vector<::aluminum_shark::Ctxt>& ctxts =
+        ph.getCurrentCiphertexts();
+    int i = 0;
+    AS_LOG("Number of arg_literals: " + std::to_string(arg_literals.size()) +
+           " number of arg_ctxts: " + std::to_string(ctxts.size()));
     for (const auto& l : arg_literals) {
       arg_literal_ptrs.push_back(&l);
+
+      // create copies the input ctxts
+      ::aluminum_shark::Ctxt ctxt = ctxts[i++];
+      AS_LOG("Input Literal to Ctxt: " + l.ToStringOneline() + " -> " +
+             ctxt.getName());
+      arg_ctxts_.push_back(std::move(ctxt));
     }
+
     return Evaluate(computation, arg_literal_ptrs);
   }
 
@@ -336,6 +359,120 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // so we cannot use flat_hash_map any more.
   absl::node_hash_map<const HloInstruction*, Literal> evaluated_;
 
+  // Ctxt stuff
+  //
+  // We need to keep track of the Ctxts just like the literals above. Once an
+  // HloInstruction has been evaluted we store the resulting Ctxt in this map.
+  // Ctxt can be quite memory intensive so we don't want to copy them around.
+  // For now the evaluator owns the Ctxt. Once computation is complete we pass a
+  // pointer to the outside. This could be a problem in terms of lifetime, if
+  // the evaluator goes out of scope. In that case we need have the Ctxt be
+  // owned by a nother object with a longer lifetime.
+  //
+  // this `GetEvaluatedCtxtFor` can either reutrn a Ctxt or a Ptxt therefore it
+  // returns the base type `BaseTxt`
+
+  // Just like the literals we are tracking Ctxt to HLO mapping
+  ::aluminum_shark::BaseTxt& GetEvaluatedCtxtFor(const HloInstruction* hlo) {
+    AS_LOG("Getting Ctxt for " + hlo->name());
+    if (hlo->IsConstant()) {
+      auto& literal = hlo->literal();
+      AS_LOG("Converting constant to ctxt, literal: " + literal.ToString() +
+             " Hlo shape: " + hlo->shape().ToString());
+      if (hlo->shape().rank() == 0) {
+        // get the context that we are working with by taking it from the first
+        // input parameter
+        AS_LOG("Getting Ctxt");
+        ::aluminum_shark::Ctxt& tempctxt = arg_ctxts_.at(0);
+        AS_LOG("Getting HECtxt");
+        ::aluminum_shark::HECtxt& hectxt = tempctxt.getValue();
+        AS_LOG("Getting Context");
+        const ::aluminum_shark::HEContext* context = hectxt.getContext();
+        if (::xla::primitive_util::IsFloatingPointType(
+                literal.shape().element_type())) {
+          AS_LOG("Converting to float");
+          double value = literal.GetAsDouble({}).value();
+          contant_ptxt_[hlo] = ::aluminum_shark::Ptxt(
+              context->encode(std::vector<double>{value}), hlo->name());
+          AS_LOG("Convertted constant to ptxt: " +
+                 contant_ptxt_[hlo].to_string());
+        } else {
+          AS_LOG("Converting to long");
+          long value = literal.GetIntegralAsS64({}).value();
+          AS_LOG_S << "Context " << reinterpret_cast<const void*>(context)
+                   << std::endl;
+          AS_LOG_S << "Context info " << context->to_string() << std::endl;
+          contant_ptxt_[hlo] = ::aluminum_shark::Ptxt(
+              context->encode(std::vector<long>{value}), hlo->name());
+          AS_LOG("Convertted constant to ptxt: " +
+                 contant_ptxt_[hlo].to_string());
+        }
+      } else {
+        // TODO: handle none scalar literals
+        AS_LOG("Only scalar constanst are supported at the moment");
+      }
+      return contant_ptxt_[hlo];
+    }
+    if (hlo->opcode() == HloOpcode::kParameter) {
+      return arg_ctxts_.at(hlo->parameter_number());
+    }
+    AS_LOG_S << "Searching through maps " << std::endl;
+    auto it = evaluated_ctxt_.find(hlo);
+    // it could be that we are actually dealing with a plaintext
+    if (it == evaluated_ctxt_.end()) {
+      AS_LOG_S << "Did not find a ctxt for " << hlo->ToString()
+               << " looking for a ptxt" << std::endl;
+      auto it_ptxt = contant_ptxt_.find(hlo);
+      if (it_ptxt != contant_ptxt_.end()) {
+        return it_ptxt->second;
+      }
+      AS_LOG_S << "Did not find a ptxt for " << hlo->ToString() << " either"
+               << std::endl;
+      AS_LOG_S << "Dumping maps: " << std::endl;
+      for (auto iter = evaluated_ctxt_.begin(); iter != evaluated_ctxt_.end();
+           iter++) {
+        AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
+      }
+      for (auto iter = contant_ptxt_.begin(); iter != contant_ptxt_.end();
+           iter++) {
+        AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
+      }
+    }
+    CHECK(it != evaluated_ctxt_.end())
+        << "could not find evaluated value for: " << hlo->ToString();
+    return it->second;
+  }
+
+  // helper function to assign plaintexts and ciphertexts to correct storage
+  // objects
+  void unwrapBaseTxt(const HloInstruction* hlo,
+                     ::aluminum_shark::BaseTxt& base) {
+    try {
+      evaluated_ctxt_[hlo] = dynamic_cast<::aluminum_shark::Ctxt&>(base);
+    } catch (const std::bad_cast& e) {
+      // that's ok. ignore
+    }
+    contant_ptxt_[hlo] = static_cast<::aluminum_shark::Ptxt&>(base);
+  }
+
+  void unwrapBaseTxt(const HloInstruction* hlo,
+                     std::shared_ptr<::aluminum_shark::BaseTxt> base) {
+    unwrapBaseTxt(hlo, *base);
+  }
+
+  // TODO: think about one structure for both. it would make the lookup and
+  // unwrapping easier. like `std::map<const HloInstruction*, BaseTxt>`
+
+  // mapping for evaluated Ctxt. for now this structure owns the Ctxt
+  std::map<const HloInstruction*, ::aluminum_shark::Ctxt> evaluated_ctxt_;
+
+  // mapping for ptxt constants
+  std::map<const HloInstruction*, ::aluminum_shark::Ptxt> contant_ptxt_;
+
+  // we deal with the input parameters in the same way the plaintexts are dealt
+  // with
+  std::vector<::aluminum_shark::Ctxt> arg_ctxts_;
+
   // Use fast path that uses eigen in the evaluator.
   bool use_fast_path_ = false;
 
@@ -384,10 +521,12 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       custom_call_handler_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(AluminumSharkHloEvaluator);
+
 };  // namespace DfsHloVisitorWithDefault
 
 std::unique_ptr<Array2D<float>> MatmulArray2D(const Array2D<float>& lhs,
                                               const Array2D<float>& rhs);
+
 }  // namespace aluminum_shark
 }  // namespace xla
 

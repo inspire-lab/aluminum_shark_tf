@@ -16,9 +16,12 @@ limitations under the License.
 #ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_HLO_EVALUATOR_TYPED_VISITOR_H
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_HLO_EVALUATOR_TYPED_VISITOR_H
 
+#include <cxxabi.h>
+
 #include <bitset>
 #include <cmath>
 #include <type_traits>
+#include <typeinfo>
 
 #include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
@@ -568,6 +571,12 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
               return ElementwiseT(ToArithmeticSafeType(lhs_elem) *
                                   ToArithmeticSafeType(rhs_elem));
             }));
+    parent_->unwrapBaseTxt(
+        multiply,
+        ElementWiseBinaryOpCtxt(multiply, [](::aluminum_shark::BaseTxt& lhs,
+                                             ::aluminum_shark::BaseTxt& rhs) {
+          return lhs * rhs;
+        }));
     return Status::OK();
   }
 
@@ -589,6 +598,11 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                           return ElementwiseT(ToArithmeticSafeType(lhs_elem) +
                                               ToArithmeticSafeType(rhs_elem));
                         }));
+    parent_->unwrapBaseTxt(
+        add, ElementWiseBinaryOpCtxt(add, [](::aluminum_shark::BaseTxt& lhs,
+                                             ::aluminum_shark::BaseTxt& rhs) {
+          return lhs + rhs;
+        }));
     return Status::OK();
   }
 
@@ -3006,18 +3020,50 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
 
-    AS_LOG("ElementWiseBinaryOp: Literal 1: " + lhs_literal.ToString() +
-           " Literal 2: " + rhs_literal.ToString());
+    AS_LOG("ElementWiseBinaryOp " + instruction->name() + " : Literal 1: " +
+           lhs_literal.ToString() + " Literal 2: " + rhs_literal.ToString());
 
     Literal result(shape);
 
     TF_RETURN_IF_ERROR(
         result.Populate<ReturnT>([&](absl::Span<const int64_t> multi_index) {
+          std::stringstream ss;
+          ss << "multi_index[";
+          for (const auto& i : multi_index) {
+            ss << i << ", ";
+          }
+          ss << "]";
+          AS_LOG(ss.str());
           return ConvertBinaryFunction(binary_op)(
               lhs_literal.Get<ReturnT>(multi_index),
               rhs_literal.Get<ReturnT>(multi_index));
         }));
-    return std::move(result);
+    return result;
+  }
+
+  std::shared_ptr<::aluminum_shark::BaseTxt> ElementWiseBinaryOpCtxt(
+      HloInstruction* instruction,
+      const std::function<std::shared_ptr<::aluminum_shark::BaseTxt>(
+          ::aluminum_shark::BaseTxt&, ::aluminum_shark::BaseTxt&)>& binary_op) {
+    const auto shape = instruction->shape();
+    const auto* lhs = instruction->operand(0);
+    const auto* rhs = instruction->operand(1);
+    // TF_RET_CHECK(ShapeUtil::SameDimensions(shape, rhs->shape()));
+    // TF_RET_CHECK(ShapeUtil::SameDimensions(lhs->shape(), rhs->shape()));
+
+    const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
+    const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
+
+    ::aluminum_shark::BaseTxt& lhs_btxt = parent_->GetEvaluatedCtxtFor(lhs);
+    ::aluminum_shark::BaseTxt& rhs_btxt = parent_->GetEvaluatedCtxtFor(rhs);
+
+    AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+           "  on Ctxt: Ctxt 1: " + lhs_btxt.to_string() +
+           " Ctxt 2: " + rhs_btxt.to_string());
+
+    std::shared_ptr<::aluminum_shark::BaseTxt> shrd_ptr =
+        binary_op(lhs_btxt, rhs_btxt);
+    return shrd_ptr;
   }
 
   template <typename LhsType, typename RhsType, typename EhsType>

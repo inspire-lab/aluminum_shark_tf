@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_COMPILER_XLA_LITERAL_H_
-#define TENSORFLOW_COMPILER_XLA_LITERAL_H_
+#ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_LITERAL_H
+#define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_LITERAL_H
 
 #include <functional>
 #include <initializer_list>
@@ -1191,4 +1191,5 @@ Literal LiteralBase::Replicate(int64_t times) const {
 
 }  // namespace xla
 
-#endif  // TENSORFLOW_COMPILER_XLA_LITERAL_H_
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_XLA_LITERAL_H \
+        */

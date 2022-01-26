@@ -1,1 +1,1 @@
-../../messing_around/test_plugin.py
+../../python/aluminum_shark/test_plugin.py

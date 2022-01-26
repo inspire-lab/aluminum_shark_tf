@@ -306,6 +306,13 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
   }
   AS_LOG(ss.str());
 
+  // set the computation resutl. so it can be retrieved from python
+  auto result_ctxt = static_cast<::aluminum_shark::Ctxt&>(
+      GetEvaluatedCtxtFor(computation.root_instruction()));
+  AS_LOG("Setting compution result: " + result_ctxt.to_string());
+  auto& pyHandle = ::aluminum_shark::PythonHandle::getInstance();
+  pyHandle.setCurrentResult(result_ctxt);
+
   return GetEvaluatedLiteralFor(computation.root_instruction()).Clone();
 }
 
@@ -534,10 +541,14 @@ Status AluminumSharkHloEvaluator::HandleConstant(HloInstruction*) {
 }
 
 Status AluminumSharkHloEvaluator::HandleReshape(HloInstruction* reshape) {
+  AS_LOG("Reshaping from" + reshape->operand(0)->shape().ToString() + " to " +
+         reshape->shape().ToString());
   TF_ASSIGN_OR_RETURN(
       evaluated_[reshape],
       GetEvaluatedLiteralFor(reshape->operand(0))
           .Reshape(AsInt64Slice(reshape->shape().dimensions())));
+  // TODO: eventually this needs to be proper reshaping
+  unwrapBaseTxt(reshape, GetEvaluatedCtxtFor(reshape->operand(0)));
   return Status::OK();
 }
 
@@ -872,8 +883,10 @@ Status AluminumSharkHloEvaluator::HandleTuple(HloInstruction* tuple) {
   for (auto operand : tuple->operands()) {
     operand_literals.push_back(&GetEvaluatedLiteralFor(operand));
   }
-
   evaluated_[tuple] = LiteralUtil::MakeTuple(operand_literals);
+  // TODO: proper tuple handling
+  unwrapBaseTxt(tuple, GetEvaluatedCtxtFor(tuple->operand(0)));
+
   return Status::OK();
 }
 
@@ -1926,6 +1939,9 @@ Status AluminumSharkHloEvaluator::HandleBroadcast(HloInstruction* broadcast) {
       evaluated_[broadcast],
       operand.Broadcast(broadcast->shape(), broadcast->dimensions()));
 
+  // TODO: proper broadcast
+  unwrapBaseTxt(broadcast, GetEvaluatedCtxtFor(broadcast->operand(0)));
+
   return Status::OK();
 }
 
@@ -1960,6 +1976,10 @@ Status AluminumSharkHloEvaluator::HandleGetTupleElement(
 
   evaluated_[get_tuple_element] =
       Literal(ShapeUtil::GetTupleElementShape(operand->shape(), index));
+
+  // TODO: proper tuple handling
+  unwrapBaseTxt(get_tuple_element, GetEvaluatedCtxtFor(operand));
+
   return evaluated_[get_tuple_element].CopyFrom(operand_tuple_literal,
                                                 /*dest_shape_index=*/{},
                                                 /*src_shape_index=*/{index});
@@ -2637,19 +2657,12 @@ Status AluminumSharkHloEvaluator::HandleCustomCall(
 Status AluminumSharkHloEvaluator::Preprocess(HloInstruction* hlo) {
   VLOG(2) << "About to visit HLO: " << hlo->ToString();
   AS_LOG("About to visit HLO: " + hlo->ToString());
-  aluminum_shark::DataRegistry& reg = getInstance();
-  if(!reg.exists(hlo)){
-    AS_LOG("Generating DummyDataType for: " + hlo->ToString());
-    reg.put(hlo, aluminum_shark::DummyDataType(hlo->ToString()));
-  }
   return ShapeUtil::ValidateShape(hlo->shape());
 }
 
 Status AluminumSharkHloEvaluator::Postprocess(HloInstruction* hlo) {
   VLOG(2) << "Finished visiting " << hlo->ToString()
           << "; evaluated value is: " << GetEvaluatedLiteralFor(hlo).ToString();
-  AS_LOG("Finished visiting " + hlo->ToString() +
-         "; evaluated value is: " + GetEvaluatedLiteralFor(hlo).ToString());
   // Out of convenience the literal may have been produced with a different
   // layout. Relayout as indicated by the HLO instruction.
   if (!Layout::Equal().MinorToMajorOnly()(
@@ -2657,6 +2670,7 @@ Status AluminumSharkHloEvaluator::Postprocess(HloInstruction* hlo) {
           hlo->shape().layout())) {
     evaluated_.at(hlo) = evaluated_.at(hlo).Relayout(hlo->shape());
   }
+
   return Status::OK();
 }
 
