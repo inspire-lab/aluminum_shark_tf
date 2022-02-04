@@ -61,18 +61,6 @@ cc_library(
 )
 
 cc_library(
-    name = "data_registry",
-    srcs = ["data_registry.cc"],
-    hdrs = ["data_registry.h"],
-    deps = [
-        ":ctxt",
-        ":logging",
-        "//tensorflow/compiler/xla/service:hlo_instruction",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "compiler",
     srcs = ["compiler.cc"],
     hdrs = ["compiler.h"],
