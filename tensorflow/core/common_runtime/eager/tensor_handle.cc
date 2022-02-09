@@ -274,7 +274,6 @@ TensorHandle::TensorHandle(tensorflow::Tensor&& t, Device* d, Device* op_device,
            << " tensor: " << t.DeviceSafeDebugString();
 }
 
-
 TensorHandle* TensorHandle::CreateEmptyLocalHandle(Device* d, Device* op_device,
                                                    Device* resource_device,
                                                    tensorflow::DataType dtype,
@@ -978,6 +977,12 @@ Status TensorHandle::CopyToDevice(const EagerContext& ctx,
   const bool src_cpu = srcd->tensorflow_gpu_device_info() == nullptr;
   bool is_same_device =
       (srcd == dstd) || (srcd->name() == dstd->name()) || (dst_cpu && src_cpu);
+
+  std::cout << __FILE__ << ":" << __LINE__
+            << " Coping Tensor to device:  " << std::endl;
+  // std::cout << "\tTensor: " << DebugString() << std::endl;
+  std::cout << "\tSource: " << srcd->name() << std::endl;
+  std::cout << "\tDestination: " << dstd->name() << std::endl;
 
   const tensorflow::Tensor* src = nullptr;
   TF_RETURN_IF_ERROR(Tensor(&src));

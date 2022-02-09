@@ -252,7 +252,6 @@ Status KernelAndDeviceOp::Run(
     const absl::optional<EagerRemoteFunctionParams>& remote_func_params,
     const absl::optional<ManagedStackTrace>& stack_trace,
     CoordinationServiceAgent* coordination_service_agent) {
-  std::cout << "KernelAndDeviceOp::Run" << std::endl;
   OpKernelContext::Params params;
   params.device = device_;
   params.frame_iter = FrameAndIter(0, 0);
@@ -266,6 +265,11 @@ Status KernelAndDeviceOp::Run(
   params.rendezvous = rendezvous_;
   params.stack_trace = stack_trace;
   OpExecutionState* op_execution_state = nullptr;
+
+  std::cout << __FILE__ << ":" << __LINE__
+            << " KernelAndDeviceOp::Run; Kernel info : " << std::endl;
+  std::cout << "\t" << kernel_->name() << std::endl;
+  std::cout << "\t" << kernel_->type_string() << std::endl;
 
   CancellationManager default_cancellation_manager;
   if (cancellation_manager) {
@@ -304,6 +308,10 @@ Status KernelAndDeviceOp::Run(
     profiler::AnnotatedTraceMe activity(
         [&] { return kernel_->TraceString(context, /*verbose=*/false); },
         profiler::TraceMeLevel::kInfo);
+    std::cout << __FILE__ << ":" << __LINE__
+              << " Device info:  " << device_->name() << std::endl;
+    std::cout << "\t" << device_->parsed_name() << std::endl;
+    std::cout << "\t" << device_->device_type() << std::endl;
     device_->Compute(kernel_.get(), &context);
   }
 

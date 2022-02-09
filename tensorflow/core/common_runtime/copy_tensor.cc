@@ -58,6 +58,8 @@ void CopyHostToDevice(const Tensor* input, Allocator* cpu_allocator,
                       DeviceContext* recv_dev_context, StatusCallback done,
                       bool sync_dst_compute) {
   if (input->dtype() == DT_VARIANT) {
+    std::cout << __FILE__ << ":" << __LINE__
+              << " CopyHostToDevice dtype: DT_VARIANT " << std::endl;
     Tensor copy(cpu_allocator, DT_VARIANT, input->shape());
     auto* status_cb = new ReffedStatusCallback(std::move(done));
     core::ScopedUnref status_cb_unref(status_cb);
@@ -111,9 +113,14 @@ void CopyHostToDevice(const Tensor* input, Allocator* cpu_allocator,
       *output = std::move(copy);
     }
   } else if (input->dtype() == DT_RESOURCE) {
+    std::cout << __FILE__ << ":" << __LINE__
+              << " CopyHostToDevice dtype: DT_RESSOURCE " << std::endl;
     *output = *input;
     done(Status::OK());
   } else {
+    std::cout << __FILE__ << ":" << __LINE__
+              << " CopyHostToDevice dtype: " << DataType_Name(input->dtype())
+              << std::endl;
     recv_dev_context->CopyCPUTensorToDevice(input, dst, output, std::move(done),
                                             sync_dst_compute);
   }
@@ -216,6 +223,10 @@ void CopyTensor::ViaDMA(StringPiece edge_name, DeviceContext* send_dev_context,
       dst_alloc_attr.on_host() ? DEVICE_CPU : dst->attributes().device_type());
   const bool non_cpu_src = src_device_type != DeviceType(DEVICE_CPU);
   const bool non_cpu_dst = dst_device_type != DeviceType(DEVICE_CPU);
+
+  std::cout << __FILE__ << ":" << __LINE__ << " Copying tensor from  "
+            << src_device_type.type_string() << " to "
+            << dst_device_type.type_string() << std::endl;
 
   // TODO(phawkins): choose an allocator optimal for both the src and dst
   // devices, not just the src device.

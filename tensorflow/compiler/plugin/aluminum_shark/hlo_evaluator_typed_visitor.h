@@ -3020,8 +3020,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
 
-    AS_LOG("ElementWiseBinaryOp " + instruction->name() + " : Literal 1: " +
-           lhs_literal.ToString() + " Literal 2: " + rhs_literal.ToString());
+    AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+           " : Literal 1: " + lhs_literal.ToStringWithLayout() +
+           " Literal 2: " + rhs_literal.ToStringWithLayout());
 
     Literal result(shape);
 
