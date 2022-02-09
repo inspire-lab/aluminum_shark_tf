@@ -273,7 +273,10 @@ cc_library(
         "hlo_evaluator_typed_visitor_uint64.cc",
         "hlo_evaluator_typed_visitor_uint8.cc",
     ],
-    hdrs = ["hlo_evaluator.h"],
+    hdrs = [
+        "hlo_evaluator.h",
+        "utils/utils.h",
+    ],
     deps = [
         ":ctxt",
         ":logging",
