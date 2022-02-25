@@ -1382,6 +1382,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     CHECK(ShapeUtil::SameElementType(lhs->shape(), rhs->shape()));
     CHECK(ShapeUtil::SameElementType(lhs->shape(), dot->shape()));
 
+    AS_LOG_S << " Handling Dot operation: " << lhs->shape().ToString() << " x "
+             << rhs->shape().ToString() << " -> " << dot->ToString()
+             << std::endl;
+
     // There must be 1 and only 1 Contracting dimension for lhs and rhs.
     const int64_t lhs_contracting_dimension =
         dnums.lhs_contracting_dimensions(0);
@@ -1447,6 +1451,11 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     DimensionVector lhs_index(lhs_rank);
     DimensionVector rhs_index(rhs_rank);
 
+    AS_LOG_S << " Handling Dot Slow Path operation: "
+             << lhs_literal.shape().ToString() << " x "
+             << rhs_literal.shape().ToString() << " -> "
+             << dot->shape().ToString() << std::endl;
+
     // result_index_locations[i] contains one or two pointers to the locations
     // in lhs_index or rhs_index where the i'th result index should go.
     absl::InlinedVector<std::pair<int64_t*, int64_t*>, kInlineRank>
@@ -1498,8 +1507,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
           for (int64_t i = 0; i < result_index.size(); i++) {
             *result_index_locations[i].first = result_index[i];
+            AS_LOG_SA << "first: " << result_index[i] << std::endl;
             if (result_index_locations[i].second) {
               *result_index_locations[i].second = result_index[i];
+              AS_LOG_SA << "second: " << result_index[i] << std::endl;
             }
           }
 
@@ -1531,9 +1542,38 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             }
           }
 
+          AS_LOG_S << "Matrix multiplication: " << std::endl;
+          AS_LOG_SA << "\t [";
+          for (const auto& v : result_index) {
+            AS_LOG_SA << v << ", ";
+          }
+          AS_LOG_SA << "] = [";
+          for (const auto& v : lhs_index) {
+            AS_LOG_SA << v << ", ";
+          }
+          AS_LOG_SA << "] x [";
+          for (const auto& v : rhs_index) {
+            AS_LOG_SA << v << ", ";
+          }
+          AS_LOG_SA << "] = " << static_cast<ReturnT>(result_val) << std::endl;
+
           return static_cast<ReturnT>(result_val);
         }));
 
+    ShapeUtil::ForEachSubshape(
+        result.shape(),
+        [&](const Shape& subshape, const ShapeIndex& index) -> void {
+          auto data = result.data<ReturnT>(index);
+          AS_LOG_SA << "[";
+          for (const auto& v : index) {
+            AS_LOG_SA << v << ", ";
+          }
+          AS_LOG_SA << "]: [";
+          for (const auto& v : data) {
+            AS_LOG_SA << v << ", ";
+          }
+          AS_LOG_SA << "]" << std::endl;
+        });
     parent_->evaluated_[dot] = std::move(result);
     return Status::OK();
   }
@@ -1604,8 +1644,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
     auto func = [&](absl::Span<const int64_t> input_index) {
       for (auto i = 0; i < input_index.size(); ++i) {
-        // Interior padding occurs logically before edge padding, so in the case
-        // of negative edge padding elements are removed from the
+        // Interior padding occurs logically before edge padding, so in the
+        // case of negative edge padding elements are removed from the
         // interior-padded operand.
         target_index[i] =
             pad_config.dimensions(i).edge_padding_low() +
@@ -1916,17 +1956,17 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     auto source_literal_scatter = LiteralUtil::CreateR0<ReturnT>(ReturnT());
     auto scattered_literal = LiteralUtil::CreateR0<ReturnT>(ReturnT());
     do {
-      // For each element in `source`, we place a window in `operand`. For each
-      // window placement, we iterate inside the window twice:
+      // For each element in `source`, we place a window in `operand`. For
+      // each window placement, we iterate inside the window twice:
       //
       // 1. Find the selected index by applying `select` function to all
       // elements. E.g., If the `select` function is GreaterEqual, the first
-      // iteration through the window finds the biggest value and returns its
-      // index.
+      // iteration through the window finds the biggest value and returns
+      // its index.
       //
-      // 2. Using the selected index, scatter value from `source` to result. We
-      // do this by iterating through the window, and compare each index with
-      // the selected index.
+      // 2. Using the selected index, scatter value from `source` to result.
+      // We do this by iterating through the window, and compare each index
+      // with the selected index.
       absl::optional<ReturnT> selected_val;
       absl::optional<std::vector<int64_t>> selected_index;
 
@@ -1968,8 +2008,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                 {&source_literal_scatter, &scattered_literal})
                       .ConsumeValueOrDie();
               result.Set(operand_index, computed_result.Get<ReturnT>({}));
-              // Clear visit states so that the we can use the evaluator again
-              // on the same computation.
+              // Clear visit states so that the we can use the evaluator
+              // again on the same computation.
               embedded_evaluator.ResetVisitStates();
             }
           });
@@ -2114,8 +2154,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   // Returns an ShapeUtil::IndexIterationSpace that iterates over the update
-  // scatter dimensions while keeping the rest of the update dimensions clamped
-  // to 0.
+  // scatter dimensions while keeping the rest of the update dimensions
+  // clamped to 0.
   ShapeUtil::IndexIterationSpace IterationSpaceForUpdateScatterIndices(
       const Shape& updates_shape, const ScatterDimensionNumbers& dim_numbers) {
     int64_t updates_rank = updates_shape.dimensions_size();
@@ -2133,8 +2173,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   // Return an ShapeUtil::IndexIterationSpace that iterates over the update
-  // window dimensions while keeping the rest of the update dimensions clamped
-  // to 0.
+  // window dimensions while keeping the rest of the update dimensions
+  // clamped to 0.
   ShapeUtil::IndexIterationSpace IterationSpaceForUpdateWindowIndices(
       const Shape& updates_shape, const ScatterDimensionNumbers& dim_numbers) {
     int64_t updates_rank = updates_shape.dimensions_size();
@@ -2151,11 +2191,11 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             std::vector<int64_t>(updates_rank, 1)};
   }
 
-  // This functor computes the contribution of scatter_indices to an input index
-  // corresponding to an update index.  That is, given an update index I, it
-  // picks out the scatter indices in I and uses them to look up a scatter
-  // index, S, from the scatter indices tensor, and expands S into the input
-  // space according to scatter_dims_to_operand_dims.
+  // This functor computes the contribution of scatter_indices to an input
+  // index corresponding to an update index.  That is, given an update index
+  // I, it picks out the scatter indices in I and uses them to look up a
+  // scatter index, S, from the scatter indices tensor, and expands S into
+  // the input space according to scatter_dims_to_operand_dims.
   //
   // This is similar to the class
   // AluminumSharkHloEvaluator::OutputGatherIndexToInputIndex that does the
@@ -2195,15 +2235,16 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     // Returns the contribution of scatter_indices to the input index
     // corresponding to update_index.  See scatter_inner_loop_body.
     //
-    // This is conceptually  a stateless transformation from update_index to the
-    // scatter input index, but:
+    // This is conceptually  a stateless transformation from update_index to
+    // the scatter input index, but:
     //
-    //  - Instead of allocating memory to represent the scatter input index on
+    //  - Instead of allocating memory to represent the scatter input index
+    //  on
     //    every invocation we reuse the same storage for the result
     //    (input_index_), mutating it in place.
     //  - Instead of allocating buffers for temporary values like
-    //    index_vector_index_ and index_vector on every invocation, we reuse the
-    //    same storage for all invocations.
+    //    index_vector_index_ and index_vector on every invocation, we reuse
+    //    the same storage for all invocations.
     //
     // This returns a Span into memory owned by the class.
     StatusOr<absl::Span<const int64_t>> operator()(
@@ -2216,8 +2257,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
    private:
     // Propagates the scatter index dimensions from the update index into
-    // index_vector_index_ by mutating index_vector_index_ in place.  Does not
-    // update the dim_numbers.index_vector_dim() dimension -- that's the
+    // index_vector_index_ by mutating index_vector_index_ in place.  Does
+    // not update the dim_numbers.index_vector_dim() dimension -- that's the
     // dimension we iterate over in FetchIndexVector.
     void PropagateUpdateIndexScatterDimsToIndexVectorIndex(
         absl::Span<const int64_t> update_index) {
@@ -2235,8 +2276,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       }
     }
 
-    // Populates index_vector_ by iterating over scatter_indices_ according to
-    // index_vector_index_.
+    // Populates index_vector_ by iterating over scatter_indices_ according
+    // to index_vector_index_.
     Status FetchIndexVector() {
       int64_t index_vector_dim = dim_numbers_.index_vector_dim();
       for (int64_t i = 0, e = index_vector_.size(); i < e; i++) {
@@ -2259,8 +2300,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       }
     }
 
-    // input_dim_value_to_index_vector_[i] tells us how to compute dimension i
-    // of the input index from the index vector.  See
+    // input_dim_value_to_index_vector_[i] tells us how to compute dimension
+    // i of the input index from the index vector.  See
     // PropagateIndexVectorToInputIndex.
     std::vector<int64_t> input_dim_value_to_index_vector_;
 
@@ -2283,10 +2324,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Literal& scatter_indices_;
   };
 
-  // This functor computes the contribution of the window indices in an update
-  // index to an input index.  That is, given an update index I it picks out the
-  // update window indices in I and expands it into a window index into the
-  // input shape.
+  // This functor computes the contribution of the window indices in an
+  // update index to an input index.  That is, given an update index I it
+  // picks out the update window indices in I and expands it into a window
+  // index into the input shape.
   //
   // This is similar to the class
   // AluminumSharkHloEvaluator::OutputWindowIndexToInputIndex that does the
@@ -2324,10 +2365,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     // Returns the contribution of the window indices to the input index
     // corresponding to update_index.  See scatter_inner_loop_body.
     //
-    // This is conceptually a stateless transformation from update_index to the
-    // window input index, but instead of allocating memory to represent the
-    // scatter input index on every invocation we reuse the same storage for the
-    // result (input_index_), mutating it in place.
+    // This is conceptually a stateless transformation from update_index to
+    // the window input index, but instead of allocating memory to represent
+    // the scatter input index on every invocation we reuse the same storage
+    // for the result (input_index_), mutating it in place.
     //
     // This returns a Span into memory owned by the class.
     StatusOr<absl::Span<const int64_t>> operator()(
@@ -2336,8 +2377,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       return absl::Span<const int64_t>(input_index_);
     }
 
-    // Returns for a given 'input_dim' the corresponding update dimension index,
-    // or -1 if 'input_dim' is an elided window dimension.
+    // Returns for a given 'input_dim' the corresponding update dimension
+    // index, or -1 if 'input_dim' is an elided window dimension.
     int64_t input_dim_value_to_update_index(int64_t input_dim) {
       return input_dim_value_to_update_index_[input_dim];
     }
@@ -2357,8 +2398,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       }
     }
 
-    // input_dim_value_to_index_vector_[i] tells us how to compute dimension i
-    // of the input index from the update index. See
+    // input_dim_value_to_index_vector_[i] tells us how to compute dimension
+    // i of the input index from the update index. See
     // PropagateUpdateIndexWindowDimsToInputIndex.
     std::vector<int64_t> input_dim_value_to_update_index_;
 
@@ -2392,14 +2433,14 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     std::vector<int64_t> update_index(updates_shape.dimensions_size());
 
     UpdateScatterIndexToInputIndex update_scatter_index_to_input_index(
-        &scatter->scatter_dimension_numbers(), /*input_shape=*/operand_shape,
-        updates_shape, &scatter_indices);
+        &scatter->scatter_dimension_numbers(),
+        /*input_shape=*/operand_shape, updates_shape, &scatter_indices);
     UpdateWindowIndexToInputIndex update_window_index_to_input_index(
         scatter->scatter_dimension_numbers(), /*input_shape=*/operand_shape,
         updates_shape);
 
-    // Initialize the result with the operand. This makes it easier to handle
-    // the updates even when the indices are repeated.
+    // Initialize the result with the operand. This makes it easier to
+    // handle the updates even when the indices are repeated.
     Literal result = operand.Clone();
     AluminumSharkHloEvaluator embedded_evaluator;
     auto scatter_inner_loop_body =
@@ -2419,8 +2460,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                 i);
         // If 'update_dim' is -1, it means 'i' is an elided window dim. This
         // means we set the iteration index to 0, so for the purpose of the
-        // following calculations we can consider the update dimension size to
-        // be 1.
+        // following calculations we can consider the update dimension size
+        // to be 1.
         int64_t update_dim_size =
             update_dim == -1 ? 1 : updates_shape.dimensions(update_dim);
         // If any part of the update region is out-of-bounds, then do not
@@ -2615,7 +2656,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
           using Uint = typename UintWithSize<sizeof(NativeT)>::type;
           Uint value_as_int = absl::bit_cast<Uint>(elem);
 
-          // Code is based on the CPU/GPU implementation in LLVM-emitting code.
+          // Code is based on the CPU/GPU implementation in LLVM-emitting
+          // code.
           //
           // Bits in float32 type:
           //   mantissa : bits [0:22]
@@ -2626,8 +2668,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                 Uint{1} << (src_mantissa_bits - dest_mantissa_bits);
 
             // Compute rounding bias for round-to-nearest with ties to even.
-            // This is equal to a base value of 0111... plus one bit if the last
-            // remaining mantissa bit is 1.
+            // This is equal to a base value of 0111... plus one bit if the
+            // last remaining mantissa bit is 1.
             const Uint base_rounding_bias = (last_mantissa_bit_mask >> 1) - 1;
             const Uint x_last_mantissa_bit =
                 (value_as_int & last_mantissa_bit_mask) >>
@@ -2635,10 +2677,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             const Uint x_rounding_bias =
                 x_last_mantissa_bit + base_rounding_bias;
 
-            // Add rounding bias, and mask out truncated bits.  Note that the
-            // case where adding the rounding bias overflows into the exponent
-            // bits is correct; the non-masked mantissa bits will all be zero,
-            // and the exponent will be incremented by one.
+            // Add rounding bias, and mask out truncated bits.  Note that
+            // the case where adding the rounding bias overflows into the
+            // exponent bits is correct; the non-masked mantissa bits will
+            // all be zero, and the exponent will be incremented by one.
             const Uint truncation_mask = ~(last_mantissa_bit_mask - 1);
             value_as_int = value_as_int + x_rounding_bias;
             value_as_int = value_as_int & truncation_mask;
@@ -2649,16 +2691,17 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             const Uint exp_bits_mask = (Uint{1 << src_exponent_bits} - 1)
                                        << src_mantissa_bits;
 
-            // An exponent of 2^(n-1)-1 -- that is, 0111... with the zero in the
-            // most- significant bit -- is equal to 1.0f for all exponent sizes.
-            // Adding 2^(n-1)-1 to this gives us the highest non-infinite
-            // exponent for a bit- size of n, and subtracting 2^(n-1)-1 from
-            // this gives us the lowest' exponent (corresponding to 0.0f).
+            // An exponent of 2^(n-1)-1 -- that is, 0111... with the zero in
+            // the most- significant bit -- is equal to 1.0f for all
+            // exponent sizes. Adding 2^(n-1)-1 to this gives us the highest
+            // non-infinite exponent for a bit- size of n, and subtracting
+            // 2^(n-1)-1 from this gives us the lowest' exponent
+            // (corresponding to 0.0f).
             //
-            // Thus, the f32 exponent corresponding to the highest non-infinite
-            // exponent for a bit size of n is (2^7-1) + 2^(n-1)-1, and the f32
-            // exponent corresponding to the lowest exponent for a bit size of n
-            // is (2^7-1) - 2^(n-1)-1.
+            // Thus, the f32 exponent corresponding to the highest
+            // non-infinite exponent for a bit size of n is (2^7-1) +
+            // 2^(n-1)-1, and the f32 exponent corresponding to the lowest
+            // exponent for a bit size of n is (2^7-1) - 2^(n-1)-1.
             //
             // Note that we have already checked that exponents_bits >= 1.
             const Uint exponent_bias = (Uint{1} << (src_exponent_bits - 1)) - 1;
@@ -2680,9 +2723,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             const Uint x_signed_zero = value_as_int & sign_bit_mask;
             const Uint x_signed_inf = x_signed_zero | exp_bits_mask;
 
-            // Force to zero or infinity if overflow or underflow.  (Note that
-            // this truncates all denormal values to zero, rather than rounding
-            // them.)
+            // Force to zero or infinity if overflow or underflow.  (Note
+            // that this truncates all denormal values to zero, rather than
+            // rounding them.)
             value_as_int = x_overflows ? x_signed_inf : value_as_int;
             value_as_int = x_underflows ? x_signed_zero : value_as_int;
           }
@@ -2765,9 +2808,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             parent_->GetEvaluatedLiteralFor(random->operand(1));
 
         // std::uniform_real_distribution(a, b) can sometimes return a value
-        // equal to b.  Unclear if this is a spec bug or an implementation bug
-        // or WAI [0] [1] [2].  Anyway for our purposes we want a half-open
-        // interval, so we have to re-sample if we get `b` out.
+        // equal to b.  Unclear if this is a spec bug or an implementation
+        // bug or WAI [0] [1] [2].  Anyway for our purposes we want a
+        // half-open interval, so we have to re-sample if we get `b` out.
         //
         // [0] https://gcc.gnu.org/bugzilla/show_bug.cgi?id=63176
         // [1] https://bugs.llvm.org/show_bug.cgi?id=18767
@@ -2824,9 +2867,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         const Literal& high =
             parent_->GetEvaluatedLiteralFor(random->operand(1));
 
-        // Note std::uniform_int_distribution assumes interval is closed, i.e.,
-        // [low, high], but we want [low, high) instead. Hence high-1 is used as
-        // the upper range.
+        // Note std::uniform_int_distribution assumes interval is closed,
+        // i.e., [low, high], but we want [low, high) instead. Hence high-1
+        // is used as the upper range.
         std::uniform_int_distribution<int64_t> generator(
             low.Get<NativeT>({}), high.Get<NativeT>({}) - 1);
 
@@ -2853,15 +2896,17 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
  private:
-  // Creates a vector of multipliers which can be used to create a linear index
-  // into shape.
+  // Creates a vector of multipliers which can be used to create a linear
+  // index into shape.
   //
   // Given the multidimensional index {i1, ..., iN} and
-  // M = MakeDimMultipliers(shape), the corresponding linear index LI is simply
+  // M = MakeDimMultipliers(shape), the corresponding linear index LI is
+  // simply
   //
   //   LI = i1 * M[1] + i2 * M[2] + ... + iN * M[N].
   //
-  // This lets you calculate LI given the multidimensional indices in any order.
+  // This lets you calculate LI given the multidimensional indices in any
+  // order.
   static DimensionVector MakeDimMultipliers(const Shape& shape) {
     DimensionVector v(shape.rank());
     int64_t scale = 1;
@@ -2872,10 +2917,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     return v;
   }
 
-  // For one particular placement of a window in a base shape (the placement is
-  // represented as `window_count_index`), iterates inside the window.
-  // Translates the window index into base index. If the base index is within
-  // bound, call `f` with the base index.
+  // For one particular placement of a window in a base shape (the placement
+  // is represented as `window_count_index`), iterates inside the window.
+  // Translates the window index into base index. If the base index is
+  // within bound, call `f` with the base index.
   static void IterateThroughWindow(
       const Shape& window_shape, const Window& window, const Shape& base_shape,
       const absl::Span<const int64_t> window_count_index,
@@ -2888,18 +2933,16 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       bool out_of_bound = false;
       for (int64_t i = 0; i < rank; ++i) {
         // Padding is applied to the dilated base. Say that padding is 3 and
-        // dilation is 2 for some dimension. After applying base dilation and
-        // padding, the dimension looks like:
-        // P P P E D D E D D ... E D D E P P P
-        // where E are the elements and D are the holes. So, the elements are
-        // located in indices: padding + k*base_dilation for k = {0, 1, 2, ...}.
-        // We are accessing elements in the transformed base at indices:
-        // window_count_index * stride + window_index * window_dilation.
-        // Solving for k gives us
-        // (win_count_i * stride + win_i * win_dilation - pad) / base_dilation
-        // When this is a natural number, we index an original element.
-        // Otherwise, we index a 0 (pad or hole), and we don't need to apply
-        // the callback f.
+        // dilation is 2 for some dimension. After applying base dilation
+        // and padding, the dimension looks like: P P P E D D E D D ... E D
+        // D E P P P where E are the elements and D are the holes. So, the
+        // elements are located in indices: padding + k*base_dilation for k
+        // = {0, 1, 2, ...}. We are accessing elements in the transformed
+        // base at indices: window_count_index * stride + window_index *
+        // window_dilation. Solving for k gives us (win_count_i * stride +
+        // win_i * win_dilation - pad) / base_dilation When this is a
+        // natural number, we index an original element. Otherwise, we index
+        // a 0 (pad or hole), and we don't need to apply the callback f.
         base_index[i] =
             window_count_index[i] * window.dimensions(i).stride() +
             window_index[i] * window.dimensions(i).window_dilation() -

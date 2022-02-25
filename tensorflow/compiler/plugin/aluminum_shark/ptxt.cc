@@ -7,8 +7,9 @@ namespace aluminum_shark {
 
 Ptxt::Ptxt(std::shared_ptr<HEPtxt> heptxt, std::string name)
     : value_(heptxt), name_(name) {
-  AS_LOG_S << "Created Ptxt " << name << " internal "
-           << reinterpret_cast<void*>(value_.get()) << std::endl;
+  AS_LOG_S << "Created Ptxt " << name
+           << " internal: " << reinterpret_cast<void*>(value_.get())
+           << std::endl;
 }
 
 std::string Ptxt::to_string() const {
@@ -18,6 +19,8 @@ std::string Ptxt::to_string() const {
   // TODO: get more info
   return name_;
 }
+
+bool Ptxt::is_initialized() const { return !!value_.get(); }
 
 // create a deep copy which also creates a copy of stored object
 Ptxt Ptxt::deepCopy() const {

@@ -37,6 +37,8 @@ class Ptxt : public BaseTxt {
   void setName(const std::string& name);
   const std::string& getName() const;
 
+  bool is_initialized() const;
+
   // create a deep copy which also creates a copy of the stored object
   Ptxt deepCopy() const;
 

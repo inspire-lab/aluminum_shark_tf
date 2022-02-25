@@ -84,6 +84,8 @@ limitations under the License.
 #include "tensorflow/core/graph/mkl_graph_util.h"
 #endif
 
+extern bool AS_LOG_TF;
+
 namespace tensorflow {
 
 namespace {
@@ -799,8 +801,10 @@ Status GetOrCreateKernelAndDevice(
     core::RefCountPtr<KernelAndDevice>* out_kernel) {
   EagerContext& ctx = op->EagerContext();
   Device* device = absl::get<Device*>(op->Device());
-  std::cout << __FILE__ << ":" << __LINE__ << " Device: " << op->DeviceName()
-            << "; " << static_cast<void*>(device) << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__ << " Device: " << op->DeviceName()
+              << "; " << static_cast<void*>(device) << std::endl;
+  }
   Fprint128 cache_key = op->MutableAttrs()->CacheKey(op->DeviceName());
   /// Include soft placement policy in cache key since the placement strategy
   // can change and thus affect which kernel is picked.
@@ -1104,7 +1108,10 @@ Status AddOrExecuteNode(core::RefCountPtr<KernelAndDevice> kernel,
                      op->GetCancellationManager(),
                      {retvals, static_cast<size_t>(num_outputs)},
                      op->GetStackTrace());
-    std::cout << __FILE__ << ":" << __LINE__ << "AddOrExecuteNode" << std::endl;
+    if (AS_LOG_TF) {
+      std::cout << __FILE__ << ":" << __LINE__ << "AddOrExecuteNode"
+                << std::endl;
+    }
     Status s = executor.SyncExecute(&node);
     // We release the inputs AFTER executing the operation in sync mode since
     // ExecuteNode does not increment the reference count and thus does not have
@@ -1137,7 +1144,10 @@ Status EagerLocalExecute(EagerOperation* op, TensorHandle** retvals,
   profiler::TraceMe activity(
       [&] { return absl::StrCat("EagerLocalExecute: ", op->Name()); },
       profiler::TraceMeLevel::kInfo);
-  std::cout << absl::StrCat("EagerLocalExecute: ", op->Name()) << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__
+              << absl::StrCat("EagerLocalExecute: ", op->Name()) << std::endl;
+  }
   EagerContext& ctx = op->EagerContext();
   auto& executor = op->Executor();
   TF_RETURN_IF_ERROR(executor.status());
@@ -1510,8 +1520,10 @@ Status EagerExecute(EagerOperation* op, TensorHandle** retvals,
       [&] { return absl::StrCat("EagerExecute: ", op->Name()); },
       profiler::TraceMeLevel::kInfo);
 
-  std::cout << __FILE__ << ":" << __LINE__
-            << absl::StrCat("EagerExecute: ", op->Name()) << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__
+              << absl::StrCat("EagerExecute: ", op->Name()) << std::endl;
+  }
   if (!op->Executor().Async()) {
     // In sync mode, always clear error to maintain the same behavior as before.
     // TODO(b/141004939): Remove this.
@@ -1523,7 +1535,9 @@ Status EagerExecute(EagerOperation* op, TensorHandle** retvals,
       EagerOpRewriteRegistry::PRE_EXECUTION, op, &out_op));
 
   if (op->IsLocal()) {
-    std::cout << __FILE__ << ":" << __LINE__ << " Local op" << std::endl;
+    if (AS_LOG_TF) {
+      std::cout << __FILE__ << ":" << __LINE__ << " Local op" << std::endl;
+    }
     if (out_op) {
       op = out_op.get();
     }
@@ -1538,8 +1552,10 @@ Status EagerExecute(EagerOperation* op, TensorHandle** retvals,
   if (out_op) {
     op = out_op.get();
   }
-  std::cout << __FILE__ << ":" << __LINE__ << " remote execution op"
-            << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__ << " remote execution op"
+              << std::endl;
+  }
   return EagerRemoteExecute(op, retvals, num_retvals);
 #endif  // !IS_MOBILE_PLATFORM
 }
@@ -1570,7 +1586,10 @@ Status EagerKernelExecute(
   if (ctx->GetDistributedManager() != nullptr)
     coord_agent = ctx->GetDistributedManager()->GetCoordinationServiceAgent();
 #endif  // !IS_MOBILE_PLATFORM
-  std::cout << "EagerKernelExecute" << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__ << " EagerKernelExecute"
+              << std::endl;
+  }
   TF_RETURN_IF_ERROR(kernel->Run(container, inputs, &outputs,
                                  cancellation_manager, remote_func_params,
                                  stack_trace, coord_agent));
@@ -1594,28 +1613,31 @@ namespace {
 Status LocalEagerCopyToDevice(TensorHandle* h, EagerContext* ctx,
                               EagerExecutor* executor, Device* dstd,
                               bool mirror, TensorHandle** result) {
-  std::cout << __FILE__ << ":" << __LINE__
-            << " LocalEagerCopyToDevice mirror: " << mirror << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__
+              << " LocalEagerCopyToDevice mirror: " << mirror << std::endl;
+  }
   TF_RETURN_IF_ERROR(executor->status());
   Device* d = ctx->CanonicalDevice(dstd);
-  std::cout << __FILE__ << ":" << __LINE__ << " Device info:  " << d->name()
-            << std::endl;
-  std::cout << "\t" << d->parsed_name() << std::endl;
-  std::cout << "\t" << d->device_type() << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__ << " Device info:  " << d->name()
+              << std::endl;
+    std::cout << "\t" << d->parsed_name() << std::endl;
+    std::cout << "\t" << d->device_type() << std::endl;
 
-  std::cout << __FILE__ << ":" << __LINE__
-            << " Destinatio Device info:  " << dstd->name() << std::endl;
-  std::cout << "\t" << dstd->parsed_name() << std::endl;
-  std::cout << "\t" << dstd->device_type() << std::endl;
+    std::cout << __FILE__ << ":" << __LINE__
+              << " Destinatio Device info:  " << dstd->name() << std::endl;
+    std::cout << "\t" << dstd->parsed_name() << std::endl;
+    std::cout << "\t" << dstd->device_type() << std::endl;
 
-  Status status;
-  std::cout << __FILE__ << ":" << __LINE__
-            << " Tensor info:  " << h->DebugString() << std::endl;
-  std::cout << "\tDeviceName: " << h->DeviceName(&status) << std::endl;
-  std::cout << "\tBackingDeviceName: " << h->BackingDeviceName(&status)
-            << std::endl;
-  std::cout << "\tDevicType: " << h->DeviceType(&status) << std::endl;
-
+    Status status;
+    std::cout << __FILE__ << ":" << __LINE__
+              << " Tensor info:  " << h->DebugString() << std::endl;
+    std::cout << "\tDeviceName: " << h->DeviceName(&status) << std::endl;
+    std::cout << "\tBackingDeviceName: " << h->BackingDeviceName(&status)
+              << std::endl;
+    std::cout << "\tDevicType: " << h->DeviceType(&status) << std::endl;
+  }
   if (mirror && h->HasLocalMirror(d)) {
     h->Ref();
     *result = h;

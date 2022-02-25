@@ -4,6 +4,8 @@
 
 #include <iostream>
 
+bool AS_LOG_TF = false;
+
 namespace {
 // read environment variable to see if we should be logging;
 bool log_on = std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr

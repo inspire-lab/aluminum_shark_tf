@@ -45,6 +45,8 @@ limitations under the License.
 #include "tensorflow/core/protobuf/remote_tensor_handle.pb.h"
 #endif  // IS_MOBILE_PLATFORM
 
+extern bool AS_LOG_TF;
+
 namespace tensorflow {
 
 class ExecuteNodeArgs : public EagerKernelArgs {
@@ -121,7 +123,10 @@ class ExecuteNode : public EagerNode {
       }
       ++i;
     }
-    std::cout << "ExecuteNode::Run" << std::endl;
+    if (AS_LOG_TF) {
+      std::cout << __FILE__ << ":" << __LINE__ << " ExecuteNode::Run"
+                << std::endl;
+    }
     return EagerKernelExecute(ctx_, inputs_, remote_func_params_, kernel_,
                               graph_collector_, cancellation_manager_, retvals_,
                               stack_trace_);

@@ -21,6 +21,8 @@ limitations under the License.
 #include "tensorflow/core/lib/gtl/cleanup.h"
 #include "tensorflow/core/util/env_var.h"
 
+extern bool AS_LOG_TF;
+
 namespace tensorflow {
 namespace {
 bool IsAsyncWaitForRemoteFunctionEnabled() {
@@ -112,8 +114,10 @@ Status EagerExecutor::SyncExecute(EagerNode* node) {
   if (!s.ok()) {
     return s;
   }
-
-  std::cout << "EagerExecutor::SyncExecute" << std::endl;
+  if (AS_LOG_TF) {
+    std::cout << __FILE__ << ":" << __LINE__ << " EagerExecutor::SyncExecute"
+              << std::endl;
+  }
   // Inline execution in sync mode.
   s = node->Run();
   tensorflow::mutex_lock l(node_queue_mutex_);

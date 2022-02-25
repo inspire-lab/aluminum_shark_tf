@@ -286,7 +286,8 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
 
   std::stringstream ss;
   for (const HloInstruction* instr : computation.instructions()) {
-    ss << instr->name() << " = " << instr->unique_id() << "\n";
+    ss << instr->name() << ": id=" << instr->unique_id()
+       << ", opcode=" << instr->opcode() << "\n";
     for (const HloInstruction* oper : instr->operands()) {
       ss << "\t" << oper->name() << " id = " << oper->unique_id() << "\n";
     }
@@ -555,6 +556,8 @@ Status AluminumSharkHloEvaluator::HandleReshape(HloInstruction* reshape) {
 Status AluminumSharkHloEvaluator::HandleTranspose(HloInstruction* transpose) {
   evaluated_[transpose] = GetEvaluatedLiteralFor(transpose->operand(0))
                               .Transpose(transpose->dimensions());
+  // TODO: eventually this needs to be proper transposing
+  unwrapBaseTxt(transpose, GetEvaluatedCtxtFor(transpose->operand(0)));
   return Status::OK();
 }
 
