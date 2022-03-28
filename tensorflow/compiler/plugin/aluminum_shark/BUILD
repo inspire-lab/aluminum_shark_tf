@@ -31,14 +31,33 @@ cc_library(
 )
 
 cc_library(
+    name = "layout",
+    srcs = ["layout.cc"],
+    hdrs = ["layout.h"],
+    deps = [
+        ":logging",
+    ],
+)
+
+cc_library(
+    name = "base_txt",
+    srcs = ["base_txt.cc"],
+    hdrs = ["base_txt.h"],
+    deps = [
+        ":layout",
+        ":logging",
+    ],
+)
+
+cc_library(
     name = "ptxt",
     srcs = ["ptxt.cc"],
     hdrs = [
-        "base_txt.h",
         "ctxt.h",
         "ptxt.h",
     ],
     deps = [
+        ":base_txt",
         ":logging",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
     ],
@@ -49,10 +68,10 @@ cc_library(
     name = "ctxt",
     srcs = ["ctxt.cc"],
     hdrs = [
-        "base_txt.h",
         "ctxt.h",
     ],
     deps = [
+        ":base_txt",
         ":logging",
         ":ptxt",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",

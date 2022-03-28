@@ -25,51 +25,37 @@ PythonHandle& PythonHandle::getInstance() {
 /* Python facing methods */
 /*************************/
 
-// Ctxt PythonHandle::encrypt(const std::vector<long>& ptxts,
-//                            const std::string& name) {
-//   AS_LOG("encrypting " + name);
-//   Ctxt ctxt;
-
-//   // this is as placeholder for actual encryption
-//   std::vector<long> vec(ptxts.size(), 0);
-//   for (size_t i = 0; i < vec.size(); ++i) {
-//     vec[i] = static_cast<long>(ptxts[i]);
+// void PythonHandle::setCiphertexts(std::vector<Ctxt> ctxts) {
+//   std::string log_msg = "setting ciphertexts ";
+//   for (auto& ctxt : ctxts) {
+//     log_msg += " " + ctxt.to_string();
 //   }
-
-//   ctxt.setValue(std::move(vec));
-//   ctxt.setName(name);
-//   return ctxt;
-// }
-
-// void PythonHandle::decrypt(std::vector<long>* ret, const Ctxt& ctxt) {
-//   AS_LOG("decrypting " + ctxt.to_string());
-//   ret->clear();
-//   for (auto v : ctxt.getValue()) {
-//     ret->push_back(v);
+//   AS_LOG(log_msg);
+//   // input_.clear();
+//   input_ = ctxts;
+//   log_msg = "set ciphertexts ";
+//   for (const auto& ctxt : input_) {
+//     log_msg += " " + ctxt.to_string();
+//   }
+//   AS_LOG(log_msg);
+//   for (auto& c : getCurrentCiphertexts()) {
+//     AS_LOG(c.to_string());
 //   }
 // }
 
-void PythonHandle::setCiphertexts(std::vector<Ctxt> ctxts) {
-  std::string log_msg = "setting ciphertexts ";
-  for (auto& ctxt : ctxts) {
-    log_msg += " " + ctxt.to_string();
-  }
-  AS_LOG(log_msg);
-  // input_.clear();
-  input_ = ctxts;
-  log_msg = "set ciphertexts ";
-  for (const auto& ctxt : input_) {
-    log_msg += " " + ctxt.to_string();
-  }
-  AS_LOG(log_msg);
-  for (auto& c : getCurrentCiphertexts()) {
-    AS_LOG(c.to_string());
-  }
+// const Ctxt PythonHandle::retriveCiphertextsResults() {
+//   AS_LOG("retrieving result " + result_.to_string());
+//   return result_;
+// }
+
+void PythonHandle::registerComputation(std::shared_ptr<ComputationHandle> ch) {
+  computationQueue_.push(ch);
 }
 
-const Ctxt PythonHandle::retriveCiphertextsResults() {
-  AS_LOG("retrieving result " + result_.to_string());
-  return result_;
+std::shared_ptr<ComputationHandle> PythonHandle::consumeComputationHandle() {
+  std::shared_ptr<ComputationHandle> ret = computationQueue_.front();
+  computationQueue_.pop();
+  return ret;
 }
 
 /*************************/
@@ -91,16 +77,40 @@ void PythonHandle::setCurrentResult(Ctxt& ctxt) {
   result_ = ctxt;
 }
 
-// Ctxt Context::encrypt(const std::vector<long>& ptxts, const std::string&
-// name) {
-//   auto& pyh = PythonHandle::getInstance();
-//   return pyh.encrypt(ptxts, name);
-// }
+// Computation
 
-// void Context::decrypt(std::vector<long>* ret, const Ctxt& ctxt) {
-//   auto& pyh = PythonHandle::getInstance();
-//   pyh.decrypt(ret, ctxt);
-// }
+std::vector<Ctxt> ComputationHandle::getCiphertTexts() {
+  int num = -1;
+  AS_LOG_S << "invoking ciphertext callback " << reinterpret_cast<void*>(&num)
+           << std::endl;
+  void* call_back_result = ctxt_callback_(&num);
+  AS_LOG_S << "callback returned " << num << " input array ( "
+           << call_back_result << ") " << std::endl;
+  std::vector<Ctxt> ret;
+  aluminum_shark_Ctxt** input_array =
+      reinterpret_cast<aluminum_shark_Ctxt**>(call_back_result);
+  for (size_t i = 0; i < num; i++) {
+    aluminum_shark_Ctxt* as_ctxt =
+        reinterpret_cast<aluminum_shark_Ctxt*>(input_array[i]);
+    ret.push_back(as_ctxt->ctxt.operator*());
+  }
+  return ret;
+}
+
+// retrieve the result of the computation
+void ComputationHandle::transfereResults(std::vector<Ctxt>& ctxts) {
+  void** result = new void*[ctxts.size()];
+  for (size_t i = 0; i < ctxts.size(); ++i) {
+    aluminum_shark_Ctxt* ctxt = new aluminum_shark_Ctxt();
+    ctxt->ctxt = std::make_shared<Ctxt>(ctxts[i]);
+    result[i] = reinterpret_cast<void*>(ctxt);
+  }
+  // hand the results back to python
+  result_callback_(result, ctxts.size());
+  // python has taken over the owenership of the ciphertext handles. we can get
+  // rid of the return array
+  delete[] result;
+}
 
 }  // namespace aluminum_shark
 
@@ -367,40 +377,50 @@ void aluminum_shark_DestroyCiphertext(void* ctxt_ptr) {
   delete static_cast<aluminum_shark_Ctxt*>(ctxt_ptr);
 }
 
-// set the ciphertexts used for the next computation
-void aluminum_shark_SetChipherTexts(void* values, const int size) {
-  AS_LOG_S << "setting ciphertext: " << values << "number:" << size
-           << std::endl;
-  aluminum_shark_Ctxt** ctxts = static_cast<aluminum_shark_Ctxt**>(values);
-  std::vector<aluminum_shark::Ctxt> currentCtxts;
-  AS_LOG_S << "Ctxts: [ ";
-  for (int i = 0; i < size; ++i) {
-    AS_LOG_SA << reinterpret_cast<void*>(ctxts[i]) << ", ";
-    aluminum_shark::Ctxt ctxt = ctxts[i]->ctxt.operator*();
-    currentCtxts.push_back(ctxt);
-  }
-  AS_LOG_SA << "] " << std::endl;
-  auto& pyh = aluminum_shark::PythonHandle::getInstance();
-  pyh.setCiphertexts(currentCtxts);
-}
-
-void* aluminum_shark_GetChipherTextResult(void** context_return) {
-  auto& pyh = aluminum_shark::PythonHandle::getInstance();
-  const aluminum_shark::Ctxt ctxt = pyh.retriveCiphertextsResults();
-  aluminum_shark_Ctxt* ret = new aluminum_shark_Ctxt();
-  // create shared_prt with a copy of the result
-  ret->ctxt = std::make_shared<aluminum_shark::Ctxt>(ctxt);
-  AS_LOG_S << "Getting ciphertext result: " << reinterpret_cast<void*>(ret)
-           << " wrapped object:" << ret->ctxt << std::endl;
-  auto it = context_map.find(ctxt.getValue().getContext());
-  if (it == context_map.end()) {
-    AS_LOG_S << "couldnt find the context" << std::endl;
-  }
-  AS_LOG_S << "ret" << reinterpret_cast<void*>(context_return) << std::endl;
-  *context_return = it->second;
-  AS_LOG_S << "ret " << reinterpret_cast<void*>(context_return) << std::endl;
-  AS_LOG_S << "*ret " << reinterpret_cast<void*>(*context_return) << std::endl;
+void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
+                                         void (*result_callback)(void*, int)) {
+  aluminum_shark_Computation* ret = new aluminum_shark_Computation();
+  ret->computation = std::make_shared<aluminum_shark::ComputationHandle>(
+      ctxt_callback, result_callback);
+  auto& pyh = ::aluminum_shark::PythonHandle::getInstance();
+  pyh.registerComputation(ret->computation);
   return ret;
 }
+
+// // set the ciphertexts used for the next computation
+// void aluminum_shark_SetChipherTexts(void* values, const int size) {
+//   AS_LOG_S << "setting ciphertext: " << values << "number:" << size
+//            << std::endl;
+//   aluminum_shark_Ctxt** ctxts = static_cast<aluminum_shark_Ctxt**>(values);
+//   std::vector<aluminum_shark::Ctxt> currentCtxts;
+//   AS_LOG_S << "Ctxts: [ ";
+//   for (int i = 0; i < size; ++i) {
+//     AS_LOG_SA << reinterpret_cast<void*>(ctxts[i]) << ", ";
+//     aluminum_shark::Ctxt ctxt = ctxts[i]->ctxt.operator*();
+//     currentCtxts.push_back(ctxt);
+//   }
+//   AS_LOG_SA << "] " << std::endl;
+//   auto& pyh = aluminum_shark::PythonHandle::getInstance();
+//   pyh.setCiphertexts(currentCtxts);
+// }
+
+// void* aluminum_shark_GetChipherTextResult(void** context_return) {
+//   auto& pyh = aluminum_shark::PythonHandle::getInstance();
+//   const aluminum_shark::Ctxt ctxt = pyh.retriveCiphertextsResults();
+//   aluminum_shark_Ctxt* ret = new aluminum_shark_Ctxt();
+//   // create shared_prt with a copy of the result
+//   ret->ctxt = std::make_shared<aluminum_shark::Ctxt>(ctxt);
+//   AS_LOG_S << "Getting ciphertext result: " << reinterpret_cast<void*>(ret)
+//            << " wrapped object:" << ret->ctxt << std::endl;
+//   auto it = context_map.find(ctxt.getValue().getContext());
+//   if (it == context_map.end()) {
+//     AS_LOG_S << "couldnt find the context" << std::endl;
+//   }
+//   AS_LOG_S << "ret" << reinterpret_cast<void*>(context_return) << std::endl;
+//   *context_return = it->second;
+//   AS_LOG_S << "ret " << reinterpret_cast<void*>(context_return) << std::endl;
+//   AS_LOG_S << "*ret " << reinterpret_cast<void*>(*context_return) <<
+//   std::endl; return ret;
+// }
 
 }  // extern "C"

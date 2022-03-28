@@ -2,7 +2,7 @@
 
 #bazel build --local_ram --config=dbg resources=4096 --subcommands //tensorflow/tools/pip_package:build_pip_package --verbose_failures
 # bazel build -j 6 --config=dbg //tensorflow/tools/pip_package:build_pip_package #--verbose_failures
-bazel build -j 6  --local_ram_resources=4096  //tensorflow/tools/pip_package:build_pip_package #--verbose_failures
+bazel build -j 6  --local_ram_resources=4096  //tensorflow/tools/pip_package:build_pip_package --verbose_failures
 if [ $? -ne 0 ]; then
     exit 1
 fi

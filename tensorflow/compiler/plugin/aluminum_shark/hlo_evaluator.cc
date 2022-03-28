@@ -307,12 +307,13 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
   }
   AS_LOG(ss.str());
 
-  // set the computation resutl. so it can be retrieved from python
+  // invoke result callback
   auto result_ctxt = static_cast<::aluminum_shark::Ctxt&>(
       GetEvaluatedCtxtFor(computation.root_instruction()));
-  AS_LOG("Setting compution result: " + result_ctxt.to_string());
-  auto& pyHandle = ::aluminum_shark::PythonHandle::getInstance();
-  pyHandle.setCurrentResult(result_ctxt);
+  AS_LOG_S << "About to invoke result compution result: "
+           << result_ctxt.to_string() << std::endl;
+  std::vector<::aluminum_shark::Ctxt> result{result_ctxt};
+  computation_handle_->transfereResults(result);
 
   return GetEvaluatedLiteralFor(computation.root_instruction()).Clone();
 }

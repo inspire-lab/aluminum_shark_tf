@@ -110,11 +110,13 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
                        HloPrintOptions::Canonical())
                 << std::endl;
     }
-    AS_LOG("Reading input Ctxts");
+    AS_LOG_S << "Consuiming computation handle" << std::endl;
     ::aluminum_shark::PythonHandle& ph =
         ::aluminum_shark::PythonHandle::getInstance();
-    const std::vector<::aluminum_shark::Ctxt>& ctxts =
-        ph.getCurrentCiphertexts();
+    computation_handle_ = ph.consumeComputationHandle();
+
+    std::vector<::aluminum_shark::Ctxt> ctxts =
+        computation_handle_->getCiphertTexts();
 
     // take the ctxt passed in from python and map them to literals
     AS_LOG_S << "Number of arg_literals: "
@@ -626,6 +628,9 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // Use fast path that uses eigen in the evaluator.
   bool use_fast_path_ = false;
+
+  // the compuation handle that holds the callbacks
+  std::shared_ptr<::aluminum_shark::ComputationHandle> computation_handle_;
 
  private:
   template <typename ReturnT, typename NativeT>

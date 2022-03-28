@@ -2,8 +2,10 @@
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_PYTHON_PYTHON_HANDLE_H
 
 #include <chrono>
+#include <functional>
 #include <list>
 #include <map>
+#include <queue>
 #include <vector>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
@@ -16,6 +18,23 @@
 
 namespace aluminum_shark {
 
+class ComputationHandle {
+ public:
+  ComputationHandle(void* (*ctxt_callback)(int*),
+                    void (*result_callback)(void*, int))
+      : ctxt_callback_(ctxt_callback), result_callback_(result_callback){};
+
+  // uses the python callback to get the handles t
+  std::vector<Ctxt> getCiphertTexts();
+
+  // retrieve the result of the computation
+  void transfereResults(std::vector<Ctxt>& ctxts);
+
+ private:
+  std::function<void*(int*)> ctxt_callback_;
+  std::function<void(void*, int)> result_callback_;
+};
+
 class PythonHandle {
  public:
   static PythonHandle& getInstance();
@@ -23,22 +42,16 @@ class PythonHandle {
   /*************************/
   /* Python facing methods */
   /*************************/
-  // // creates ciphtertexts from the inputs
-  // // template <typename T>
-  // Ctxt encrypt(const std::vector<long>& ptxts, const std::string& name);
 
-  // // decrypts the ciphtertexts inputs
-  // void decrypt(std::vector<long>* ret, const std::string& name);
-
-  // set the ciphertext inputs for the current computation
-  void setCiphertexts(std::vector<Ctxt> ctxts);
-
-  // retrive the current computation ciphertexts results
-  const Ctxt retriveCiphertextsResults();
+  // registers the handler for the next computation
+  void registerComputation(std::shared_ptr<ComputationHandle> ch);
 
   /*************************/
   /* C/C++ facing methods  */
   /*************************/
+  std::shared_ptr<ComputationHandle> consumeComputationHandle();
+
+  // old
   const std::vector<Ctxt> getCurrentCiphertexts();
 
   void setCurrentResult(Ctxt& ctxt);
@@ -53,7 +66,8 @@ class PythonHandle {
   PythonHandle(PythonHandle&&) = delete;
   PythonHandle operator=(PythonHandle&&) = delete;
 
-  // static PythonHandle instance_;
+  std::queue<std::shared_ptr<ComputationHandle>> computationQueue_;
+
   std::vector<Ctxt> input_;
   Ctxt result_;
 
@@ -177,14 +191,25 @@ void aluminum_shark_DestroyCiphertext(void* ctxt_ptr);
 
 // Glue code for passing data back and forth between python and c++
 
-// set the ciphertexts used for the next computation. takes an array of pointers
-// to `aluminum_shark_Ctxt` and the number of elements in that array
-void aluminum_shark_SetChipherTexts(void* values, const int size);
+// a light wrapper that is passed outside to python. it holds a shared_ptr to a
+// computation
+typedef struct aluminum_shark_Computation {
+  std::shared_ptr<aluminum_shark::ComputationHandle> computation;
+};
 
-// Retrieve the result of the most recent computaiton. returns a pointer to a
-// `aluminum_shark_Ctxt`. The context the Ctxt belongs to gets written into
-// context_return as pointer to `aluminum_shark_Context`
-void* aluminum_shark_GetChipherTextResult(void** context_return);
+// registert for the next computation
+void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
+                                         void (*result_callback)(void*, int));
+
+// // set the ciphertexts used for the next computation. takes an array of
+// pointers
+// // to `aluminum_shark_Ctxt` and the number of elements in that array
+// void aluminum_shark_SetChipherTexts(void* values, const int size);
+
+// // Retrieve the result of the most recent computaiton. returns a pointer to a
+// // `aluminum_shark_Ctxt`. The context the Ctxt belongs to gets written into
+// // context_return as pointer to `aluminum_shark_Context`
+// void* aluminum_shark_GetChipherTextResult(void** context_return);
 
 #ifdef __cplusplus
 }  // extern "C"
