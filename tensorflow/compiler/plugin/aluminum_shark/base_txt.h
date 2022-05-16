@@ -4,13 +4,19 @@
 #include <memory>
 #include <vector>
 
+#include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
+
 namespace aluminum_shark {
 // Abstract base class for `Ctxt` and `Ptxt`. Faciliates arithemtic operations
 // between different types. It works under the assumption that we always
 // return a ciphertext. if operations with only plaintext operatives become
 // nessecary we need to redesign
+
 class BaseTxt {
  public:
+  BaseTxt(std::shared_ptr<Layout> layout) : layout_(layout){};
+  BaseTxt(){};
+
   virtual ~BaseTxt(){};
 
   virtual std::string to_string() const = 0;
@@ -31,6 +37,16 @@ class BaseTxt {
   virtual std::shared_ptr<BaseTxt> operator*(double other) = 0;
   virtual BaseTxt& operator+=(double other) = 0;
   virtual BaseTxt& operator*=(double other) = 0;
+
+  const Shape& shape();
+  const Layout& layout();
+
+  virtual void updateLayout(std::shared_ptr<Layout> layout) = 0;
+
+ protected:
+  std::shared_ptr<Layout> layout_;
+  // does not perform any checks
+  void setLayout(std::shared_ptr<Layout> layout);
 };
 
 }  // namespace aluminum_shark

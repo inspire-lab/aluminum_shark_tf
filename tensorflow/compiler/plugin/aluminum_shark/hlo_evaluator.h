@@ -28,6 +28,7 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/base_txt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/python/python_handle.h"
@@ -110,11 +111,13 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
                        HloPrintOptions::Canonical())
                 << std::endl;
     }
-    AS_LOG("Reading input Ctxts");
+    AS_LOG_S << "Consuiming computation handle" << std::endl;
     ::aluminum_shark::PythonHandle& ph =
         ::aluminum_shark::PythonHandle::getInstance();
-    const std::vector<::aluminum_shark::Ctxt>& ctxts =
-        ph.getCurrentCiphertexts();
+    computation_handle_ = ph.consumeComputationHandle();
+
+    std::vector<::aluminum_shark::Ctxt> ctxts =
+        computation_handle_->getCiphertTexts();
 
     // take the ctxt passed in from python and map them to literals
     AS_LOG_S << "Number of arg_literals: "
@@ -128,10 +131,14 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
     const ::aluminum_shark::HEContext* context =
         [&]() -> const ::aluminum_shark::HEContext* {
       if (ctxts.size() > 0) {
-        return ctxts[0].getValue().getContext();
+        return ctxts[0].getContext();
       }
       return nullptr;
     }();
+
+    ::aluminum_shark::LAYOUT_TYPE layout_type =
+        ctxts.size() > 0 ? ctxts[0].layout().type()
+                         : ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED;
     for (const auto& l : arg_literals) {
       arg_literal_ptrs.push_back(&l);
       if (context != nullptr) {
@@ -143,8 +150,8 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
         } else {
           AS_LOG_S << "Input Literal to Ptxt: " << l.ToStringOneline()
                    << std::endl;
-          arg_ptxts_[i] =
-              convertLiteralToPtxt(l, "arg" + std::to_string(i), context);
+          arg_ptxts_[i] = convertLiteralToPtxt(l, "arg" + std::to_string(i),
+                                               context, layout_type);
           // AS" -> " << arg_ptxts_[i].getName() << std::endl;
         }
         ++i;
@@ -412,12 +419,8 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
              " Hlo shape: " + hlo->shape().ToString());
       // get the context that we are working with by taking it from the first
       // input parameter
-      AS_LOG("Getting Ctxt");
-      ::aluminum_shark::Ctxt& tempctxt = arg_ctxts_[0];
-      AS_LOG("Getting HECtxt");
-      ::aluminum_shark::HECtxt& hectxt = tempctxt.getValue();
       AS_LOG("Getting Context");
-      const ::aluminum_shark::HEContext* context = hectxt.getContext();
+      const ::aluminum_shark::HEContext* context = arg_ctxts_[0].getContext();
       const auto type = literal.shape().element_type();
       AS_LOG_S << "constant: " << std::endl;
       AS_LOG_SA << "\telement_type: "
@@ -426,7 +429,20 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       AS_LOG_SA << "\tliteral shape: " << literal.shape().ToString()
                 << std::endl;
       const std::string& name = hlo->name();
-      constant_ptxt_[hlo] = convertLiteralToPtxt(literal, name, context);
+      // once a proper compiler is inplace we can layout all these plaintext
+      // into the form that they are needed in later. for now we rely on the
+      // forced layout
+      if (computation_handle_->useForcedLayout()) {
+        AS_LOG_S << "using forced layout "
+                 << computation_handle_->getForcedLayout() << std::endl;
+        constant_ptxt_[hlo] =
+            convertLiteralToPtxt(literal, name, context,
+                                 ::aluminum_shark::string_to_layout_type(
+                                     computation_handle_->getForcedLayout()));
+      } else {
+        constant_ptxt_[hlo] = convertLiteralToPtxt(
+            literal, name, context, ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED);
+      }
 
       return constant_ptxt_[hlo];
     }
@@ -513,7 +529,8 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // convert literal into Ptxt
   ::aluminum_shark::Ptxt convertLiteralToPtxt(
       const Literal& literal, const std::string& name,
-      const ::aluminum_shark::HEContext*& context) {
+      const ::aluminum_shark::HEContext*& context,
+      ::aluminum_shark::LAYOUT_TYPE layout_type) {
     ::aluminum_shark::Ptxt ptxt;
     ShapeUtil::ForEachSubshape(
         literal.shape(),
@@ -527,68 +544,68 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
               // int types
               case ::xla::PrimitiveType::PRED: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::PRED, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::S8: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S8, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::S16: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S16, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::S32: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S32, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::S64: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S64, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::U8: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U8, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::U16: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U16, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::U32: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U32, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::U64: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S64, long>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               // float types
               case ::xla::PrimitiveType::F16: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F16, double>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::F32: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F32, double>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::BF16: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::BF16, double>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               case ::xla::PrimitiveType::F64: {
                 ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F64, double>(
-                    literal, index, name, context);
+                    literal, index, name, context, layout_type);
                 break;
               }
               // complex types
@@ -610,22 +627,42 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
     throw std::runtime_error("invalid data type");
   };
 
-  template <xla::PrimitiveType LiteralT, typename PtxtT>
+  template <xla::PrimitiveType LiteralT, typename PtxtType>
   ::aluminum_shark::Ptxt convertLiteralToPtxt(
       const Literal& literal, const ShapeIndex& index, const std::string& name,
-      const ::aluminum_shark::HEContext*& context) {
+      const ::aluminum_shark::HEContext*& context,
+      ::aluminum_shark::LAYOUT_TYPE layout_type) {
     auto data = literal.data<
         typename ::xla::primitive_util::PrimitiveTypeToNative<LiteralT>::type>(
         index);
-    std::vector<PtxtT> vec(data.begin(), data.end());
+    std::vector<PtxtType> vec(data.begin(), data.end());
     AS_LOG_SA << "\tconverted vector: ";
     ::aluminum_shark::print_vector(vec);
     AS_LOG_SA << std::endl;
-    return ::aluminum_shark::Ptxt(context->encode(vec), name);
+    // layout vector correctly
+    // first we take the shape
+    ::aluminum_shark::Shape shape;
+    for (auto d : literal.shape().dimensions()) {
+      shape.push_back(d);
+    }
+    ::aluminum_shark::Layout* layout =
+        ::aluminum_shark::createLayout(layout_type, shape);
+    std::vector<std::vector<PtxtType>> layed_out = layout->layout_vector(vec);
+    std::vector<std::shared_ptr<::aluminum_shark::HEPtxt>> ptxts;
+    for (auto& v : layed_out) {
+      ptxts.push_back(
+          std::shared_ptr<::aluminum_shark::HEPtxt>(context->encode(v)));
+    }
+
+    return ::aluminum_shark::Ptxt(
+        ptxts, std::shared_ptr<::aluminum_shark::Layout>(layout), name);
   };
 
   // Use fast path that uses eigen in the evaluator.
   bool use_fast_path_ = false;
+
+  // the compuation handle that holds the callbacks
+  std::shared_ptr<::aluminum_shark::ComputationHandle> computation_handle_;
 
  private:
   template <typename ReturnT, typename NativeT>

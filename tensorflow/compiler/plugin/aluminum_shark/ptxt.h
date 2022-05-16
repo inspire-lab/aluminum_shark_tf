@@ -18,33 +18,34 @@ namespace aluminum_shark {
 //
 class Ptxt : public BaseTxt {
  public:
-  // Ctors
-  Ptxt() {}
-  Ptxt(std::string name) : name_(name) {}
+  // Ctor/Dtor
+  Ptxt() = default;
+  // Ptxt(const Ptxt& other) = default;
+  // Ptxt(Ptxt&& other) = default;
+  Ptxt(std::string name);
   Ptxt(std::shared_ptr<HEPtxt> ptxt, std::string name);
-  // Takes over the owernship of ptxt_ptr
-  Ptxt(HEPtxt* ptxt_ptr, std::string name)
-      : Ptxt(std::shared_ptr<HEPtxt>(ptxt_ptr), name) {}
-
+  Ptxt(std::vector<std::shared_ptr<HEPtxt>> heptxt,
+       std::shared_ptr<Layout> layout, std::string name);
   virtual ~Ptxt(){};
 
-  // setters and getters
-  void setValue(std::shared_ptr<HEPtxt> value_ptr);
-  const HEPtxt& getValue() const;
-  HEPtxt& getValue();
-  std::shared_ptr<HEPtxt> getValuePtr() const;
+  // getters / setters
+  const std::vector<std::shared_ptr<HEPtxt>>& getValue() const;
+  std::vector<std::shared_ptr<HEPtxt>>& getValue();
+  void setValue(std::vector<std::shared_ptr<HEPtxt>>& value_ptr);
 
-  void setName(const std::string& name);
   const std::string& getName() const;
-
-  bool is_initialized() const;
+  void setName(const std::string& name);
 
   // create a deep copy which also creates a copy of the stored object
   Ptxt deepCopy() const;
 
-  std::string to_string() const override;
+  bool is_initialized() const;
 
   // BaseTxt interface
+  std::string to_string() const override;
+
+  void updateLayout(std::shared_ptr<Layout> layout) override;
+
   std::shared_ptr<BaseTxt> operator+(const BaseTxt& other) const override;
   std::shared_ptr<BaseTxt> operator*(const BaseTxt& other) const override;
 
@@ -63,7 +64,7 @@ class Ptxt : public BaseTxt {
   Ptxt& operator*=(double other) override;
 
  private:
-  std::shared_ptr<HEPtxt> value_;
+  std::vector<std::shared_ptr<HEPtxt>> value_;
   std::string name_;
 };
 
