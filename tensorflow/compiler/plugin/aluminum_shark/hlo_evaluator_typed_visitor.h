@@ -289,6 +289,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                         parent_->GetEvaluatedLiteralFor(operand).Convert(
                             convert->shape().element_type()));
     parent_->evaluated_[convert] = std::move(result);
+    // on encrypted data we don't actually convert the data. so we just return
+    // the input
+    parent_->unwrapBaseTxt(parent_->GetEvaluatedCtxtFor(operand));
+
     return Status::OK();
   }
 
