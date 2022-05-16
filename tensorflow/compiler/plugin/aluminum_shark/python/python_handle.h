@@ -10,6 +10,7 @@
 
 #include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 
 /*
@@ -21,18 +22,29 @@ namespace aluminum_shark {
 class ComputationHandle {
  public:
   ComputationHandle(void* (*ctxt_callback)(int*),
-                    void (*result_callback)(void*, int))
-      : ctxt_callback_(ctxt_callback), result_callback_(result_callback){};
+                    void (*result_callback)(void*, int),
+                    const char* forced_layout)
+      : ctxt_callback_(ctxt_callback),
+        result_callback_(result_callback),
+        forced_layout_(forced_layout){};
 
-  // uses the python callback to get the handles t
+  // uses the python callback to get the handles
   std::vector<Ctxt> getCiphertTexts();
 
   // retrieve the result of the computation
   void transfereResults(std::vector<Ctxt>& ctxts);
 
+  // used forced layout
+  bool useForcedLayout() const;
+
+  // use this layout for all ptxt and ctxt in the computation. can reutrn
+  // `nullptr`
+  const char* getForcedLayout() const;
+
  private:
   std::function<void*(int*)> ctxt_callback_;
   std::function<void(void*, int)> result_callback_;
+  const char* forced_layout_;
 };
 
 class PythonHandle {
@@ -158,6 +170,18 @@ size_t aluminum_shark_numberOfSlots(void* context_ptr);
 // destory a context
 void aluminum_shark_DestroyContext(void* context_ptr);
 
+// Layout
+
+// a light wrapper that is passed outside to python. it holds a shared_ptr to
+// the layout. this stuct is meant to be dynamically allocated and
+// destyroyed via the python api belows
+typedef struct aluminum_shark_Layout {
+  std::shared_ptr<aluminum_shark::Layout> layout;
+};
+
+// get a list of all availabe layouts
+const char* const* aluminum_shark_GetAvailabeLayouts(size_t* size);
+
 // Ciphertext
 
 // a light wrapper that is passed outside to python. it holds a shared_ptr ot
@@ -167,27 +191,35 @@ typedef struct aluminum_shark_Ctxt {
   std::shared_ptr<aluminum_shark::Ctxt> ctxt;
 };
 
-// create a cipher from the given input values using the context. this function
-// dynamically allocates a `aluminum_shark_Context`. the returned refrence needs
-// to be cleaned up using `aluminum_shark_DestroyCiphertext`
-//
-// Returns: (void*)aluminum_shark_Context*
-void* aluminum_shark_encryptLong(const long* values, int size, const char* name,
-                                 void* context_ptr);
-void* aluminum_shark_encryptDouble(const double* values, int size,
-                                   const char* name, void* context_ptr);
+size_t aluminum_shark_GetCtxtShapeLen(void* ctxt_ptr);
 
-// decrypts the ctxt using the given context. the result will be written into a
-// `aluminum_shark_List` struct. This function always decrypts the maximum
-// number of slots supported by the scheme. `size`, if positive, gives an
-// indication about who many values are meaningful
-void aluminum_shark_decryptLong(long* ret, int* ret_size, void* ctxt_ptr,
-                                void* context_ptr);
-void aluminum_shark_decryptDouble(double* ret, int* ret_size, void* ctxt_ptr,
-                                  void* context_ptr);
+void aluminum_shark_GetCtxtShape(void* ctxt_ptr, size_t* shape_array);
 
 // destroy a ciphertext
 void aluminum_shark_DestroyCiphertext(void* ctxt_ptr);
+
+// create a cipher from the given input values using the context. this function
+// dynamically allocates a `aluminum_shark_Ctxt`. the returned refrence needs
+// to be cleaned up using `aluminum_shark_DestroyCiphertext`
+//
+// Returns: (void*)aluminum_shark_Ctxt*
+void* aluminum_shark_encryptLong(const long* values, int size, const char* name,
+                                 const size_t* shape, int shape_size,
+                                 const char* layout, void* context_ptr);
+void* aluminum_shark_encryptDouble(const double* values, int size,
+                                   const char* name, const size_t* shape,
+                                   int shape_size, const char* layout,
+                                   void* context_ptr);
+
+// decrypts the ctxt using the given context. the result will be written into a
+// `aluminum_shark_List` struct. This function always decrypts the maximum
+// number of slots supported by the scheme. The array pointed at by `ret` needs
+// to have allocated memory for at least as many elements as the tensor size of
+// the ciphertext. (the tensor size is the product of all dimensions of the
+// shape)
+void aluminum_shark_decryptLong(long* ret, void* ctxt_ptr, void* context_ptr);
+void aluminum_shark_decryptDouble(double* ret, void* ctxt_ptr,
+                                  void* context_ptr);
 
 // Glue code for passing data back and forth between python and c++
 
@@ -199,17 +231,8 @@ typedef struct aluminum_shark_Computation {
 
 // registert for the next computation
 void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
-                                         void (*result_callback)(void*, int));
-
-// // set the ciphertexts used for the next computation. takes an array of
-// pointers
-// // to `aluminum_shark_Ctxt` and the number of elements in that array
-// void aluminum_shark_SetChipherTexts(void* values, const int size);
-
-// // Retrieve the result of the most recent computaiton. returns a pointer to a
-// // `aluminum_shark_Ctxt`. The context the Ctxt belongs to gets written into
-// // context_return as pointer to `aluminum_shark_Context`
-// void* aluminum_shark_GetChipherTextResult(void** context_return);
+                                         void (*result_callback)(void*, int),
+                                         const char* forced_layout);
 
 #ifdef __cplusplus
 }  // extern "C"

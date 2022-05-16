@@ -33,9 +33,16 @@ cc_library(
 cc_library(
     name = "layout",
     srcs = ["layout.cc"],
-    hdrs = ["layout.h"],
+    hdrs = [
+        "base_txt.h",
+        "ctxt.h",
+        "layout.h",
+        "ptxt.h",
+    ],
     deps = [
         ":logging",
+        "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils",
     ],
 )
 
@@ -292,14 +299,12 @@ cc_library(
         "hlo_evaluator_typed_visitor_uint64.cc",
         "hlo_evaluator_typed_visitor_uint8.cc",
     ],
-    hdrs = [
-        "hlo_evaluator.h",
-        "utils/utils.h",
-    ],
+    hdrs = ["hlo_evaluator.h"],
     deps = [
         ":ctxt",
         ":logging",
         "//tensorflow/compiler/plugin/aluminum_shark/python:python_handle",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils",
         "//tensorflow/compiler/xla:array2d",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:literal_util",

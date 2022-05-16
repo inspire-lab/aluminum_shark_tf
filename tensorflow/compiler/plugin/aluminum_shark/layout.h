@@ -4,10 +4,19 @@
 #include <string>
 #include <vector>
 
+#include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+
 namespace aluminum_shark {
 
+enum LAYOUT_TYPE { UNSUPPORTED = -1, SIMPLE, BATCH };
+
+extern const std::vector<const char*> LAYOUT_TYPE_STRINGS;
+
+const char* layout_type_to_string(LAYOUT_TYPE lt);
+
+const LAYOUT_TYPE string_to_layout_type(const char* name);
+
 using Shape = std::vector<size_t>;
-using Index = std::vector<size_t>;
 
 /* Layout describes how the slots of one or more ciphertexts or
 plaintexts (all of this is true for both plain and ciphertext but for ease
@@ -51,42 +60,157 @@ for (size_t i = 0; i < x.size(); ++i){
 
 */
 
+// forward declerattions
+class Ctxt;
+class Ptxt;
+
 class Layout {
  public:
-  Layout(Shape& shape) : shape_(shape) {
-    size_t size = 1;
-    for (auto& i : shape) {
-      size *= i;
-    }
-    size_ = size;
-    indicies_.reserve(size_);
-    // creates the sub class indicies
-    init();
-  };
+  Layout(Shape& shape);
 
   virtual ~Layout(){};
 
-  // builds the internal data structures
+  // builds the internal data structures. it needs to be called after the object
+  // has been constructed. using the createLayout function takes care of that.
   virtual void init() = 0;
+
+  virtual LAYOUT_TYPE type() const = 0;
+
+  virtual Layout* deepCopy() const = 0;
 
   const std::vector<size_t>& map(size_t i) { return indicies_[i]; };
   const Shape& shape() { return shape_; };
+
+  template <typename T>
+  std::vector<std::vector<T>> layout_vector(const std::vector<T>& vec) const {
+    // create return vector
+    std::vector<std::vector<T>> ret_vec(axis_0_, std::vector<T>(axis_1_, 0));
+    // copy values into return vector
+    AS_LOG_S << "laying out vector " << vec.size() << std::endl;
+    for (size_t i = 0; i < vec.size(); ++i) {
+      const auto& idx = indicies_[i];
+      AS_LOG_S << "i" << i << " -> " << idx[0] << " ," << idx[1] << std::endl;
+      AS_LOG_S << "ret_vec[" << idx[0] << "]"
+               << " : " << ret_vec[idx[0]].size() << std::endl;
+      ret_vec[idx[0]][idx[1]] = vec[i];
+    }
+    return ret_vec;
+  };
+
+  template <typename T>
+  std::vector<T> reverse_layout_vector(
+      const std::vector<std::vector<T>>& vec) const {
+    // create return vector
+    std::vector<T> ret_vec(size_);
+    // copy values into return vector
+    for (size_t i = 0; i < ret_vec.size(); ++i) {
+      const auto& idx = indicies_[i];
+      ret_vec[i] = vec[idx[0]][idx[1]];
+    }
+    return ret_vec;
+  };
+
+  virtual bool is_compatbile(Layout* other) {
+    return this->type() == other->type();
+  };
+
+  virtual bool is_compatbile(Layout& other) {
+    return this->type() == other.type();
+  };
+
+  // Operation Interface
+  virtual void add_in_place(Ctxt& one, const Ctxt& two) const = 0;
+  virtual void multiply_in_place(Ctxt& one, const Ctxt& two) const = 0;
+
+  virtual void add_in_place(Ctxt& one, const Ptxt& two) const = 0;
+  virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const = 0;
+
+  virtual void add_in_place(Ptxt& one, const Ptxt& two) const = 0;
+  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const = 0;
+
+  virtual void add_in_place(Ctxt& one, long two) const = 0;
+  virtual void multiply_in_place(Ctxt& one, long two) const = 0;
+
+  virtual void add_in_place(Ctxt& one, double two) const = 0;
+  virtual void multiply_in_place(Ctxt& one, double two) const = 0;
+
+  virtual void add_in_place(Ptxt& one, long two) const = 0;
+  virtual void multiply_in_place(Ptxt& one, long two) const = 0;
+
+  virtual void add_in_place(Ptxt& one, double two) const = 0;
+  virtual void multiply_in_place(Ptxt& one, double two) const = 0;
 
  protected:
   Shape shape_;
   size_t size_;
   std::vector<std::vector<size_t>> indicies_;
+  size_t axis_0_,
+      axis_1_;  // number of cipher texts, number of elements in a ciphertext
 };
 
 class SimpleLayout : public Layout {
+ public:
   SimpleLayout(Shape& shape) : Layout(shape){};
   virtual void init() override;
+  virtual LAYOUT_TYPE type() const override;
+  virtual Layout* deepCopy() const override;
+
+  // Operation Interface
+  virtual void add_in_place(Ctxt& one, const Ctxt& two) const override;
+  virtual void multiply_in_place(Ctxt& one, const Ctxt& two) const override;
+
+  virtual void add_in_place(Ctxt& one, const Ptxt& two) const override;
+  virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const override;
+
+  virtual void add_in_place(Ptxt& one, const Ptxt& two) const override;
+  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const override;
+
+  virtual void add_in_place(Ctxt& one, long two) const override;
+  virtual void multiply_in_place(Ctxt& one, long two) const override;
+
+  virtual void add_in_place(Ctxt& one, double two) const override;
+  virtual void multiply_in_place(Ctxt& one, double two) const override;
+
+  virtual void add_in_place(Ptxt& one, long two) const override;
+  virtual void multiply_in_place(Ptxt& one, long two) const override;
+
+  virtual void add_in_place(Ptxt& one, double two) const override;
+  virtual void multiply_in_place(Ptxt& one, double two) const override;
 };
 
 class BatchLayout : public Layout {
+ public:
   BatchLayout(Shape& shape) : Layout(shape){};
   virtual void init() override;
+  virtual LAYOUT_TYPE type() const override;
+  virtual Layout* deepCopy() const override;
+
+  // Operation Interface
+  virtual void add_in_place(Ctxt& one, const Ctxt& two) const override;
+  virtual void multiply_in_place(Ctxt& one, const Ctxt& two) const override;
+
+  virtual void add_in_place(Ctxt& one, const Ptxt& two) const override;
+  virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const override;
+
+  virtual void add_in_place(Ptxt& one, const Ptxt& two) const override;
+  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const override;
+
+  virtual void add_in_place(Ctxt& one, long two) const override;
+  virtual void multiply_in_place(Ctxt& one, long two) const override;
+
+  virtual void add_in_place(Ctxt& one, double two) const override;
+  virtual void multiply_in_place(Ctxt& one, double two) const override;
+
+  virtual void add_in_place(Ptxt& one, long two) const override;
+  virtual void multiply_in_place(Ptxt& one, long two) const override;
+
+  virtual void add_in_place(Ptxt& one, double two) const override;
+  virtual void multiply_in_place(Ptxt& one, double two) const override;
 };
+
+Layout* createLayout(const char* type, Shape& shape);
+
+Layout* createLayout(const LAYOUT_TYPE type, Shape& shape);
 
 }  //  namespace aluminum_shark
 

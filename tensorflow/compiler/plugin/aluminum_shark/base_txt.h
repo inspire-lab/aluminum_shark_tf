@@ -41,8 +41,12 @@ class BaseTxt {
   const Shape& shape();
   const Layout& layout();
 
+  virtual void updateLayout(std::shared_ptr<Layout> layout) = 0;
+
  protected:
   std::shared_ptr<Layout> layout_;
+  // does not perform any checks
+  void setLayout(std::shared_ptr<Layout> layout);
 };
 
 }  // namespace aluminum_shark
