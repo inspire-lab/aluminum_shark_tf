@@ -114,6 +114,9 @@ class HEPtxt {
   // Ptxt and Ptxt
   virtual HEPtxt* operator+(const HEPtxt* other) = 0;
   virtual HEPtxt* addInPlace(const HEPtxt* other) = 0;
+    
+  virtual HEPtxt* operator-(const HEPtxt* other) = 0;
+  virtual HEPtxt* subInPlace(const HEPtxt* other) = 0;  
 
   virtual HEPtxt* operator*(const HEPtxt* other) = 0;
   virtual HEPtxt* multInPlace(const HEPtxt* other) = 0;
@@ -121,6 +124,7 @@ class HEPtxt {
   //  plain and ctxt
   // no inplace operations since they need to return a ctxt
   virtual HECtxt* operator+(const HECtxt* other) = 0;
+  virtual HECtxt* operator-(const HECtxt* other) = 0;
   virtual HECtxt* operator*(const HECtxt* other) = 0;
 
   // integral types
@@ -129,6 +133,12 @@ class HEPtxt {
   virtual HEPtxt* addInPlace(long other) = 0;
   virtual HEPtxt* operator+(double other) = 0;
   virtual HEPtxt* addInPlace(double other) = 0;
+   
+  //subtraction
+  virtual HEPtxt* operator-(long other) = 0;
+  virtual HEPtxt* subInPlace(long other) = 0;
+  virtual HEPtxt* operator-(double other) = 0;
+  virtual HEPtxt* subInPlace(double other) = 0;
 
   // multiplication
   virtual HEPtxt* operator*(long other) = 0;
@@ -158,6 +168,9 @@ class HECtxt {
   // ctxt and ctxt
   virtual HECtxt* operator+(const HECtxt* other) = 0;
   virtual HECtxt* addInPlace(const HECtxt* other) = 0;
+    
+  virtual HECtxt* operator-(const HECtxt* other) = 0;
+  virtual HECtxt* subInPlace(const HECtxt* other) = 0;  
 
   virtual HECtxt* operator*(const HECtxt* other) = 0;
   virtual HECtxt* multInPlace(const HECtxt* other) = 0;
@@ -171,6 +184,14 @@ class HECtxt {
   virtual HECtxt* addInPlace(long other) = 0;
   virtual HECtxt* operator+(double other) = 0;
   virtual HECtxt* addInPlace(double other) = 0;
+    
+  // subtraction
+  virtual HECtxt* operator-(const HEPtxt* other) = 0;
+  virtual HECtxt* subInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator-(long other) = 0;
+  virtual HECtxt* subInPlace(long other) = 0;
+  virtual HECtxt* operator-(double other) = 0;
+  virtual HECtxt* subInPlace(double other) = 0;    
 
   // multiplication
   virtual HECtxt* operator*(const HEPtxt* other) = 0;
