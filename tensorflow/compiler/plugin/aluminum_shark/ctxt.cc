@@ -193,4 +193,31 @@ Ctxt& Ctxt::operator*=(double other) {
   return *this;
 }
 
+// TODO RP: template this
+std::vector<double> Ctxt::decryptDouble() const {
+  std::vector<std::vector<double>> decryptions;
+  for (const auto& hectxt : value_) {
+    decryptions.push_back(getContext()->decryptDouble(hectxt.get()));
+  }
+  std::vector<double> vec =
+      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
+  AS_LOG_S << "Decrypted Double. Values: [ ";
+  aluminum_shark::stream_vector(vec);
+  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
+  return vec;
+}
+
+std::vector<long> Ctxt::decryptLong() const {
+  std::vector<std::vector<long>> decryptions;
+  for (const auto& hectxt : value_) {
+    decryptions.push_back(getContext()->decryptLong(hectxt.get()));
+  }
+  std::vector<long> vec =
+      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
+  AS_LOG_S << "Decrypted Long. Values: [ ";
+  aluminum_shark::stream_vector(vec);
+  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
+  return vec;
+}
+
 }  // namespace aluminum_shark

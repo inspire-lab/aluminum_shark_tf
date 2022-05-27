@@ -339,16 +339,12 @@ void aluminum_shark_decryptLong(long* ret, void* ctxt_ptr, void* context_ptr) {
   aluminum_shark_Ctxt* ctxt = static_cast<aluminum_shark_Ctxt*>(ctxt_ptr);
   aluminum_shark_Context* context =
       static_cast<aluminum_shark_Context*>(context_ptr);
-  std::vector<std::vector<long>> decryptions;
-  for (const auto& hectxt : ctxt->ctxt->getValue()) {
-    decryptions.push_back(context->context->decryptLong(hectxt.get()));
+  std::vector<long> vec;
+  try {
+    vec = ctxt->decryptLong();
+  } catch (const std::exception& e) {
+    AS_LOG_S << e.what() << std::endl;
   }
-  std::vector<long> vec =
-      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
-
-  AS_LOG_S << "Decrypted Long. Values: [ ";
-  aluminum_shark::stream_vector(vec);
-  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
   std::copy(vec.begin(), vec.end(), ret);
 }
 
@@ -359,15 +355,13 @@ void aluminum_shark_decryptDouble(double* ret, void* ctxt_ptr,
   aluminum_shark_Ctxt* ctxt = static_cast<aluminum_shark_Ctxt*>(ctxt_ptr);
   aluminum_shark_Context* context =
       static_cast<aluminum_shark_Context*>(context_ptr);
-  std::vector<std::vector<double>> decryptions;
-  for (const auto& hectxt : ctxt->ctxt->getValue()) {
-    decryptions.push_back(context->context->decryptDouble(hectxt.get()));
+  std::vector<double> vec;
+  try {
+    vec = ctxt->decryptDouble();
+  } catch (const std::exception& e) {
+    AS_LOG_S << e.what() << std::endl;
   }
-  std::vector<double> vec =
-      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
-  AS_LOG_S << "Decrypted Double. Values: [ ";
-  aluminum_shark::stream_vector(vec);
-  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
+
   std::copy(vec.begin(), vec.end(), ret);
 }
 
