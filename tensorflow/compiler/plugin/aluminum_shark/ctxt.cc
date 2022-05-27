@@ -199,8 +199,7 @@ std::vector<double> Ctxt::decryptDouble() const {
   for (const auto& hectxt : value_) {
     decryptions.push_back(getContext()->decryptDouble(hectxt.get()));
   }
-  std::vector<double> vec =
-      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
+  std::vector<double> vec = layout().reverse_layout_vector(decryptions);
   AS_LOG_S << "Decrypted Double. Values: [ ";
   aluminum_shark::stream_vector(vec);
   AS_LOG_SA << "number of values: " << vec.size() << std::endl;
@@ -212,8 +211,7 @@ std::vector<long> Ctxt::decryptLong() const {
   for (const auto& hectxt : value_) {
     decryptions.push_back(getContext()->decryptLong(hectxt.get()));
   }
-  std::vector<long> vec =
-      ctxt->ctxt->layout().reverse_layout_vector(decryptions);
+  std::vector<long> vec = layout().reverse_layout_vector(decryptions);
   AS_LOG_S << "Decrypted Long. Values: [ ";
   aluminum_shark::stream_vector(vec);
   AS_LOG_SA << "number of values: " << vec.size() << std::endl;

@@ -341,7 +341,7 @@ void aluminum_shark_decryptLong(long* ret, void* ctxt_ptr, void* context_ptr) {
       static_cast<aluminum_shark_Context*>(context_ptr);
   std::vector<long> vec;
   try {
-    vec = ctxt->decryptLong();
+    vec = ctxt->ctxt->decryptLong();
   } catch (const std::exception& e) {
     AS_LOG_S << e.what() << std::endl;
   }
@@ -357,7 +357,7 @@ void aluminum_shark_decryptDouble(double* ret, void* ctxt_ptr,
       static_cast<aluminum_shark_Context*>(context_ptr);
   std::vector<double> vec;
   try {
-    vec = ctxt->decryptDouble();
+    vec = ctxt->ctxt->decryptDouble();
   } catch (const std::exception& e) {
     AS_LOG_S << e.what() << std::endl;
   }
