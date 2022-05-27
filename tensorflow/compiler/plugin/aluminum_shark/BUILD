@@ -43,6 +43,9 @@ cc_library(
         ":logging",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
         "//tensorflow/compiler/plugin/aluminum_shark/utils",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:exception",
+        "//tensorflow/compiler/xla:shape_util",
+        "@com_google_absl//absl/types:span",
     ],
 )
 
@@ -82,6 +85,7 @@ cc_library(
         ":logging",
         ":ptxt",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:exception",
     ],
     alwayslink = 1,
 )
