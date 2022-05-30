@@ -266,7 +266,9 @@ void* aluminum_shark_encryptLong(const long* values, int size, const char* name,
       static_cast<aluminum_shark_Context*>(context_ptr);
   std::vector<long> ptxt_vec(values, values + size);
   AS_LOG_S << "Encrypting Long. Values: [ ";
-  aluminum_shark::stream_vector(ptxt_vec);
+  if (aluminum_shark::log()) {
+    aluminum_shark::stream_vector(ptxt_vec);
+  }
   AS_LOG_SA << " ] number of values (passed/read) " << size << "/"
             << ptxt_vec.size() << ", name: " << name << std::endl;
 
@@ -299,7 +301,9 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   // read input values
   std::vector<double> ptxt_vec(values, values + size);
   AS_LOG_S << "Encrypting Double. Values: ";
-  aluminum_shark::stream_vector(ptxt_vec);
+  if (aluminum_shark::log()) {
+    aluminum_shark::stream_vector(ptxt_vec);
+  }
   AS_LOG_SA << " number of values (passed/read) " << size << "/"
             << ptxt_vec.size() << ", name: " << name << std::endl;
 
@@ -307,7 +311,9 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   AS_LOG_S << "Creating layout, shape: " << shape << ", " << shape_size
            << std::endl;
   std::vector<size_t> shape_vec(shape, shape + shape_size);
-  aluminum_shark::stream_vector(shape_vec);
+  if (aluminum_shark::log()) {
+    aluminum_shark::stream_vector(shape_vec);
+  }
   AS_LOG_S << "layout: " << layout_type << std::endl;
   aluminum_shark::Layout* layout =
       aluminum_shark::createLayout(layout_type, shape_vec);
@@ -399,6 +405,17 @@ void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
   auto& pyh = ::aluminum_shark::PythonHandle::getInstance();
   pyh.registerComputation(ret->computation);
   return ret;
+}
+
+// turns logging on or off
+void aluminum_shark_EnableLogging(bool on) {
+  aluminum_shark::enable_logging(on);
+}
+
+// sets the log level
+void aluminum_shark_SetLogLevel(int level) {
+  // TODO RP: implement. does nothing yet.
+  AS_LOG_S << "Log levels do nothing yet";
 }
 
 }  // extern "C"

@@ -234,6 +234,12 @@ void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
                                          void (*result_callback)(void*, int),
                                          const char* forced_layout);
 
+// turns logging on or off
+void aluminum_shark_EnableLogging(bool on);
+
+// sets the log level
+void aluminum_shark_SetLogLevel(int level);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
