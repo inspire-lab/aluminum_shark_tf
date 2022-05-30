@@ -17,6 +17,12 @@ const NullStream& operator<<(NullStream&& os, const T& value) {
   return os;
 }
 
+// TODO RP: finish this
+// class Log : public std::basic_ostringstream<char> {
+//  public:
+//   static Log& getInstance();
+// };
+
 void log(const char* file, int line, const std::string message);
 
 void enable_logging(bool activate);

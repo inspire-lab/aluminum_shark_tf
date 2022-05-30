@@ -15,6 +15,13 @@ bool log_on = std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr
 
 namespace aluminum_shark {
 
+// logging singelton
+
+// Log& Log::getInstance() {
+//   static Log instance_;
+//   return instance_;
+// }
+
 void log(const char* file, int line, const std::string message) {
   if (!log_on) {
     return;

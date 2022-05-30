@@ -208,6 +208,7 @@ cc_library(
     hdrs = ["platform.h"],
     deps = [
         ":executor",
+        ":logging",
         ":platform_id",
         "//tensorflow/compiler/xla/service:platform_util",
         "//tensorflow/core:stream_executor_headers_lib",
