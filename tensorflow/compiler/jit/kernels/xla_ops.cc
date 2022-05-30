@@ -219,7 +219,7 @@ static Status CompileToLocalExecutable(
           constants, inputs, variable_infos,
           static_cast<Device*>(ctx->device()));
   TF_RETURN_IF_ERROR(args.status());
-  std::cout << "CompileToLocalExecuteable" << std::endl;
+
   return cache->Compile(options, function, *args, compile_options, compile_mode,
                         compilation_result, executable);
 }
@@ -230,9 +230,6 @@ void XlaLocalLaunchBase::Compute(OpKernelContext* ctx) {
   xla_launch_counter->GetCell(platform_info_.device_type().type_string())
       ->IncrementBy(1);
 
-  std::cout << "XlaLocalLaunchOpBase::Compute "
-            << Canonicalize(function_.name(), AttrSlice(&function_.attr()))
-            << std::endl;
   std::vector<const Tensor*> inputs = InputsFromContext(ctx);
   xla::LocalClient* client;
   const XlaCompiler::CompilationResult* compilation_result;
@@ -391,8 +388,6 @@ XlaCompileOp::XlaCompileOp(OpKernelConstruction* ctx)
       has_ref_vars_(HasRefVars(ctx)) {}
 
 void XlaCompileOp::Compute(OpKernelContext* ctx) {
-  std::cout << "XlaCompileOp::Computer " << def().name()
-            << (must_compile_ ? "(must-compile)" : "") << std::endl;
   VLOG(3) << "XlaCompileOp " << def().name()
           << (must_compile_ ? "(must-compile)" : "");
   xla::LocalClient* client;

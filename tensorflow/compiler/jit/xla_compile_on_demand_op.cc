@@ -159,8 +159,6 @@ Status XlaCompileOnDemandOp::Compile(
     TF_RETURN_IF_ERROR(args.status());
   }
 
-  std::cout << "XlaCompileOnDemandOp::Compile" << std::endl;
-
   return (*cache)->CompileSingleOp(options, *args, ctx, compile_options, result,
                                    executable);
 }
@@ -171,7 +169,6 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
   ResourceVarsSnapshot variable_args;
   XlaCompilationCache* cache;
 
-  std::cout << "XlaCompileOnDemandOp::Compute" << std::endl;
   OP_REQUIRES(ctx, ctx->function_library(),
               errors::Internal("Function library missing"));
   OP_REQUIRES_OK(ctx,

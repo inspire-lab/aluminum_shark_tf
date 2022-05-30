@@ -49,8 +49,6 @@ limitations under the License.
 #include "tensorflow/core/grappler/optimizers/meta_optimizer.h"
 #endif  // !IS_MOBILE_PLATFORM
 
-extern bool AS_LOG_TF;
-
 namespace tensorflow {
 
 Status EagerKernelArgs::GetLocalArg(const FunctionArgIndex& index,
@@ -268,12 +266,6 @@ Status KernelAndDeviceOp::Run(
   params.stack_trace = stack_trace;
   OpExecutionState* op_execution_state = nullptr;
 
-  if (AS_LOG_TF) {
-    std::cout << __FILE__ << ":" << __LINE__
-              << " KernelAndDeviceOp::Run; Kernel info : " << std::endl;
-    std::cout << "\t" << kernel_->name() << std::endl;
-    std::cout << "\t" << kernel_->type_string() << std::endl;
-  }
   CancellationManager default_cancellation_manager;
   if (cancellation_manager) {
     params.cancellation_manager = cancellation_manager;
@@ -311,12 +303,6 @@ Status KernelAndDeviceOp::Run(
     profiler::AnnotatedTraceMe activity(
         [&] { return kernel_->TraceString(context, /*verbose=*/false); },
         profiler::TraceMeLevel::kInfo);
-    if (AS_LOG_TF) {
-      std::cout << __FILE__ << ":" << __LINE__
-                << " Device info:  " << device_->name() << std::endl;
-      std::cout << "\t" << device_->parsed_name() << std::endl;
-      std::cout << "\t" << device_->device_type() << std::endl;
-    }
     device_->Compute(kernel_.get(), &context);
   }
 
