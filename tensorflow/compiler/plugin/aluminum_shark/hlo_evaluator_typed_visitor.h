@@ -291,8 +291,7 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     parent_->evaluated_[convert] = std::move(result);
     // on encrypted data we don't actually convert the data. so we just return
     // the input
-    parent_->unwrapBaseTxt(parent_->GetEvaluatedCtxtFor(operand));
-
+    parent_->unwrapBaseTxt(convert, parent_->GetEvaluatedCtxtFor(operand));
     return Status::OK();
   }
 
@@ -1360,6 +1359,59 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleDot(HloInstruction* dot) override {
+    // run on ctxt
+    const HloInstruction* lhs = dot->operand(0);
+    const HloInstruction* rhs = dot->operand(1);
+    ::aluminum_shark::BaseTxt& lhs_btxt = parent_->GetEvaluatedCtxtFor(lhs);
+    ::aluminum_shark::BaseTxt& rhs_btxt = parent_->GetEvaluatedCtxtFor(rhs);
+
+    const auto& dnums = dot->dot_dimension_numbers();
+    const int64_t lhs_contracting_dimension =
+        dnums.lhs_contracting_dimensions(0);
+    const int64_t rhs_contracting_dimension =
+        dnums.rhs_contracting_dimensions(0);
+
+    AS_LOG_S << "lhs contracting dim " << lhs_contracting_dimension
+             << " rhs contracting dim " << rhs_contracting_dimension
+             << std::endl;
+
+    // throw std::exception();
+
+    const ::aluminum_shark::Layout& layout = lhs_btxt.layout();
+    ::aluminum_shark::Ctxt result;
+    bool done = false;
+    // cast to the correct types
+    try {
+      // at the moment the lhs should always be a Ctxt.
+      ::aluminum_shark::Ctxt& lhs_ctxt =
+          dynamic_cast<::aluminum_shark::Ctxt&>(lhs_btxt);
+      try {
+        // rhs is a ctxt
+        ::aluminum_shark::Ctxt& rhs_ctxt =
+            dynamic_cast<::aluminum_shark::Ctxt&>(rhs_btxt);
+        result = layout.dot(lhs_ctxt, rhs_ctxt);
+        done = true;
+      } catch (const std::bad_cast e) {
+        // that's ok. ignore. other exceptions are handled by the outer catch
+        // block
+      }
+      if (!done) {
+        // no try cat in here. if something goes wrong the outer block will
+        // handle it
+        // rhs is a ptxt
+        ::aluminum_shark::Ptxt& rhs_ptxt =
+            dynamic_cast<::aluminum_shark::Ptxt&>(rhs_btxt);
+        result = layout.dot(lhs_ctxt, rhs_ptxt);
+      }
+    } catch (const std::exception& e) {
+      // log exception and rethrow
+      AS_LOG_S << e.what() << std::endl;
+      throw e;
+    }
+
+    // register result with parent
+    parent_->evaluated_ctxt_[dot] = result;
+
     if (dot->dot_dimension_numbers().rhs_contracting_dimensions_size() == 1 &&
         parent_->use_fast_path_ &&
         ShapeUtil::SameElementType(dot->operand(0)->shape(), dot->shape()) &&
