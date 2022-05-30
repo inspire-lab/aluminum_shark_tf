@@ -15,25 +15,26 @@ limitations under the License.
 
 #include "tensorflow/compiler/plugin/aluminum_shark/platform.h"
 
-#include <utility>
 #include <iostream>
+#include <utility>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_format.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/executor.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+#include "tensorflow/compiler/xla/service/platform_util.h"
 #include "tensorflow/stream_executor/device_options.h"
 #include "tensorflow/stream_executor/lib/initialize.h"
 #include "tensorflow/stream_executor/lib/status.h"
 #include "tensorflow/stream_executor/lib/status_macros.h"
 #include "tensorflow/stream_executor/multi_platform_manager.h"
 #include "tensorflow/stream_executor/platform.h"
-#include "tensorflow/compiler/xla/service/platform_util.h"
 
 namespace stream_executor {
 namespace aluminum_shark {
 
 XlaAluminumSharkPlatform::XlaAluminumSharkPlatform(const std::string& name,
-                                               const Platform::Id& id)
+                                                   const Platform::Id& id)
     : name_(name), id_(id) {}
 
 XlaAluminumSharkPlatform::~XlaAluminumSharkPlatform() {}
@@ -97,24 +98,24 @@ void XlaAluminumSharkPlatform::RegisterTraceListener(
   LOG(FATAL) << "not yet implemented: register executor trace listener";
 }
 
-void XlaAluminumSharkPlatform::UnregisterTraceListener(TraceListener* listener) {
+void XlaAluminumSharkPlatform::UnregisterTraceListener(
+    TraceListener* listener) {
   LOG(FATAL) << "not yet implemented: unregister executor trace listener";
 }
 
 static void InitializeXlaAluminumSharkPlatform() {
-  std::cout << "running platform init" << std::endl;
+  AS_LOG_S << "running platform init" << std::endl;
   std::unique_ptr<Platform> platform(new XlaAluminumSharkPlatform);
   SE_CHECK_OK(MultiPlatformManager::RegisterPlatform(std::move(platform)));
-  
-  std::vector<stream_executor::Platform*> platforms = 
-    xla::PlatformUtil::GetSupportedPlatforms().ValueOrDie();
-  for (size_t i = 0; i < platforms.size() ; ++i) {
-    std::cout << "platform: " << platforms[ i ]->Name() << std::endl;
-    std::unique_ptr<DeviceDescription> device_desc =
-      platforms[ i ]->DescriptionForDevice(-1).ValueOrDie();
-    std::cout << "device: " << device_desc->name() << std::endl;
-  }
 
+  std::vector<stream_executor::Platform*> platforms =
+      xla::PlatformUtil::GetSupportedPlatforms().ValueOrDie();
+  for (size_t i = 0; i < platforms.size(); ++i) {
+    AS_LOG_S << "platform: " << platforms[i]->Name() << std::endl;
+    std::unique_ptr<DeviceDescription> device_desc =
+        platforms[i]->DescriptionForDevice(-1).ValueOrDie();
+    AS_LOG_S << "device: " << device_desc->name() << std::endl;
+  }
 }
 
 }  // namespace aluminum_shark

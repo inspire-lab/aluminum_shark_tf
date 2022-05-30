@@ -131,13 +131,6 @@ void XlaCompilationDevice::Compute(OpKernel* op_kernel,
   xla::XlaScopedFrontendAttributesAssignment assign_frontend_attributes(
       b, std::move(merged_attributes));
 
-  std::cout << "XlaCompilationDevice::Compute "
-            << FormatNodeDefForError(op_kernel->def()) << std::endl;
-  std::cout << "XlaCompilationDevice::Compute " << op_kernel->name()
-            << std::endl;
-  std::cout << op_kernel->type_string_view() << std::endl;
-  // std::cout << op_kernel->requested_input(0) << std::endl;
-  std::cout << op_kernel->requested_device() << std::endl;
   // If no sharding metadata is found, XLA is free to use whatever device it
   // wants. In practice this usually has the effect of placing things on device
   // 0.

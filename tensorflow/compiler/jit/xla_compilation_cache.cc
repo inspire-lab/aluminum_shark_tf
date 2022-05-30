@@ -202,7 +202,6 @@ Status XlaCompilationCache::Compile(
     CompileMode compile_mode,
     const XlaCompiler::CompilationResult** out_compilation_result,
     xla::LocalExecutable** out_executable) {
-  std::cout << "XlaCompilationCache::Compile" << std::endl;
   return CompileImpl(compile_options, options, function, args, /*ctx=*/nullptr,
                      CompileScope::kFunction, compile_mode,
                      out_compilation_result, out_executable);
@@ -279,7 +278,6 @@ Status XlaSingleOpToHlo(XlaCompiler* compiler,
   TF_ASSIGN_OR_RETURN(auto graph, CreateGraph(node_def, args, result_dtypes));
 
   auto compile_with_old_bridge = [&]() {
-    std::cout << "compiling with old bridge" << std::endl;
     return compiler->CompileGraph(compile_options, node_def.name(),
                                   std::move(graph), args, compilation_result);
   };
@@ -306,9 +304,6 @@ Status XlaSingleOpToHlo(XlaCompiler* compiler,
                        ConfigProto::Experimental::MLIR_BRIDGE_ROLLOUT_ENABLED);
   VLOG(1) << "Attempting MLIR bridge."
           << (mlir_enabled ? " MLIR is explicitly enabled." : "");
-  std::cout << "Attempting MLIR bridge."
-            << (mlir_enabled ? " MLIR is explicitly enabled." : "")
-            << std::endl;
   auto mlir_result = CompileGraphToXlaHlo(
       *graph, mlir::SpanToArrayRef<XlaCompiler::Argument>(args), control_rets,
       options.device_type.type_string(), compile_options.use_tuple_arg,
@@ -322,9 +317,6 @@ Status XlaSingleOpToHlo(XlaCompiler* compiler,
   VLOG(2) << "Failed second phase of the MLIR bridge. Will "
              "retry with the old bridge. MLIR bridge compilation status: "
           << mlir_result;
-  std::cout << "Failed second phase of the MLIR bridge. Will "
-               "retry with the old bridge. MLIR bridge compilation status: "
-            << mlir_result << std::endl;
   return compile_with_old_bridge();
 }
 
@@ -336,7 +328,6 @@ Status XlaCompilationCache::CompileSingleOp(
     xla::LocalExecutable** out_executable) {
   const NodeDef& def = ctx->op_kernel().def();
   NameAttrList name;
-  std::cout << "XlaCompilationCache::CompileSingleOp" << std::endl;
   name.set_name(def.op());
   *name.mutable_attr() = def.attr();
   // Remove the "_class" attribute from the attribute set used to create the
@@ -409,16 +400,6 @@ Status XlaCompilationCache::CompileStrict(
                  it->second.cumulative_compile_time_us / 1.0e6)
           << ")";
 
-  std::cout << "compiled " << function_name << " " << it->second.compile_count
-            << " times, compile time: " << compile_time_us
-            << " us, cumulative: " << it->second.cumulative_compile_time_us
-            << " us ("
-            << tensorflow::strings::HumanReadableElapsedTime(compile_time_s)
-            << " / "
-            << tensorflow::strings::HumanReadableElapsedTime(
-                   it->second.cumulative_compile_time_us / 1.0e6)
-            << ")" << std::endl;
-
   XlaJitCompilationActivity jit_compilation_activity;
   jit_compilation_activity.set_cluster_name(function_name);
   jit_compilation_activity.set_compile_count(it->second.compile_count);
@@ -451,8 +432,6 @@ Status XlaCompilationCache::CompileAsynchronous(
   // All values are captured by value. Make sure that all pointer values (like
   // entry) do not get freed until the lambda has finished,\.
   const std::string& function_name = function.name();
-  std::cout << "XLACompilationCache::CompileAsynchronous " << function.name()
-            << std::endl;
 
   async_compilation_state_.compiler_threads->Schedule([=] {
     Entry local_entry;
@@ -548,23 +527,12 @@ Status XlaCompilationCache::CompileImpl(
   DCHECK_NE(out_executable, nullptr);
   VLOG(2) << "XlaCompilationCache::Compile " << DebugString();
 
-  std::cout << "XLACompilationCache::CompileImple " << DebugString()
-            << std::endl;
-
   if (VLOG_IS_ON(2)) {
     VLOG(2) << "num_inputs=" << args.size();
     for (int i = 0, end = args.size(); i < end; i++) {
       VLOG(3) << i << ": " << args[i].HumanString();
     }
   }
-
-  std::stringstream ss;
-  ss << "num_inputs=" << args.size() << "\n";
-  for (int i = 0, end = args.size(); i < end; i++) {
-    ss << i << ": " << args[i].HumanString() << "\n";
-  }
-  std::cout << ss.str();
-  ss.str("");
 
   TF_ASSIGN_OR_RETURN(Signature signature, BuildSignature(function, args));
 
@@ -619,7 +587,6 @@ Status XlaCompilationCache::CompileImpl(
     VLOG(2) << "Signature: " << human_signature;
   }
   human_signature = signature.HumanString();
-  std::cout << "Signature: " << signature.HumanString() << std::endl;
 
   // Acquire the cache entry lock and compile, if necessary.
   // TODO(phawkins): this locking will need to be restructured when we
@@ -631,14 +598,6 @@ Status XlaCompilationCache::CompileImpl(
           << " signature: " << human_signature << " with request count "
           << current_request_count;
 
-  ss << "Compilation cache entry hit: "
-     << static_cast<int>(entry->compile_state)
-     << " signature: " << human_signature << " with request count "
-     << current_request_count << std::endl;
-
-  std::cout << ss.str();
-  ss.str("");
-
   CompileState state = entry->compile_state;
   *out_compilation_result = nullptr;
   *out_executable = nullptr;
@@ -648,34 +607,25 @@ Status XlaCompilationCache::CompileImpl(
     if (!ShouldCompileCluster(compile_mode, is_megamorphic, is_first_execution,
                               current_request_count, function)) {
       VLOG(2) << "Not compiling for signature: " << human_signature;
-      std::cout << "Not compiling for signature: " << human_signature
-                << std::endl;
       return Status::OK();
     } else if (compile_mode == CompileMode::kAsync) {
       VLOG(2) << "Queueing asynchronous compilation for signature: "
               << human_signature;
-      std::cout << "Queueing asynchronous compilation for signature: "
-                << human_signature << std::endl;
       TF_RETURN_IF_ERROR(CompileAsynchronous(entry, compile_options, options,
                                              args, function, ctx, scope));
       return Status::OK();
     } else {
       VLOG(2) << "Instantly compiling for signature: " << human_signature;
-      std::cout << "Instantly compiling for signature: " << human_signature
-                << std::endl;
       TF_RETURN_IF_ERROR(CompileStrict(entry, compile_options, options, args,
                                        function, ctx, scope));
     }
   } else if (state == CompileState::kCompiling) {
     VLOG(2) << "Ongoing asynchronous compilation for signature: "
             << human_signature;
-    std::cout << "Ongoing asynchronous compilation for signature: "
-              << human_signature << std::endl;
+
     return Status::OK();
   } else if (state == CompileState::kCompiled) {
     VLOG(2) << "Already Compiled for signature: " << human_signature;
-    std::cout << "Already Compiled for signature: " << human_signature
-              << std::endl;
   }
 
   TF_RETURN_IF_ERROR(entry->compilation_status);

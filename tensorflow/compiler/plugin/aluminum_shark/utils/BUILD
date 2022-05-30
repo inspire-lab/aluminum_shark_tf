@@ -13,3 +13,8 @@ cc_library(
     name = "utils",
     hdrs = ["utils.h"],
 )
+
+cc_library(
+    name = "exception",
+    hdrs = ["exception.h"],
+)

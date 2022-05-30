@@ -1254,14 +1254,6 @@ Status FindKernelRegistration(
   auto typed_registry = GlobalKernelRegistryTyped();
   tf_shared_lock lock(typed_registry->mu);
   auto regs = typed_registry->registry.equal_range(key);
-  // for (auto iter = typed_registry->registry.begin();
-  //      iter != typed_registry->registry.end(); ++iter) {
-  //   std::cout << iter->first << " : " << iter->second.kernel_class_name << '
-  //   '
-  //             << iter->second.def.op() << ' ' <<
-  //             iter->second.def.device_type()
-  //             << ' ' << iter->second.def.label() << std::endl;
-  // }
   for (auto iter = regs.first; iter != regs.second; ++iter) {
     // If there is a kernel registered for the op and device_type,
     // check that the attrs match.
@@ -1270,9 +1262,6 @@ Status FindKernelRegistration(
     if (match) {
       if (*reg != nullptr) {
         if ((*reg)->def.priority() == iter->second.def.priority()) {
-          std::cout << (*reg)->def.op() << ";" << (*reg)->kernel_class_name
-                    << " : " << iter->second.def.op() << ";"
-                    << iter->second.kernel_class_name << std::endl;
           return errors::InvalidArgument(
               "Multiple OpKernel registrations match NodeDef at the same "
               "priority '",

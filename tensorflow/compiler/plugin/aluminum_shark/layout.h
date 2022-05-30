@@ -1,10 +1,19 @@
 #ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H
 
+#include <exception>
 #include <string>
 #include <vector>
 
+#include "absl/types/span.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
+#include "tensorflow/compiler/xla/shape.h"
+#include "tensorflow/compiler/xla/shape_util.h"
+
+// enable this for extra debug code to be build in
+#define LAYOUT_DEBUG
 
 namespace aluminum_shark {
 
@@ -66,7 +75,7 @@ class Ptxt;
 
 class Layout {
  public:
-  Layout(Shape& shape);
+  Layout(const Shape& shape);
 
   virtual ~Layout(){};
 
@@ -79,7 +88,8 @@ class Layout {
   virtual Layout* deepCopy() const = 0;
 
   const std::vector<size_t>& map(size_t i) { return indicies_[i]; };
-  const Shape& shape() { return shape_; };
+  const Shape& shape() const { return shape_; };
+  const size_t size() const { return size_; };
 
   template <typename T>
   std::vector<std::vector<T>> layout_vector(const std::vector<T>& vec) const {
@@ -140,9 +150,27 @@ class Layout {
   virtual void add_in_place(Ptxt& one, double two) const = 0;
   virtual void multiply_in_place(Ptxt& one, double two) const = 0;
 
+  // matrix and vector operations
+
+  // dot is the general entry point
+  virtual Ctxt dot(const Ctxt& one, const Ctxt& two) const = 0;
+  virtual Ctxt dot(const Ctxt& one, const Ptxt& two) const = 0;
+  // Matrix multplication
+  virtual Ctxt mat_mult(const Ctxt& one, const Ctxt& two) const = 0;
+  virtual Ctxt mat_mult(const Ctxt& one, const Ptxt& two) const = 0;
+  // More general matrix multplication for hihger dimensional matrices
+  // see: https://www.tensorflow.org/xla/operation_semantics#dotgeneral, and
+  // https://en.wikipedia.org/wiki/Tensor_contraction
+  virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const = 0;
+  virtual Ctxt mat_mult_general(const Ctxt& one, const Ptxt& two) const = 0;
+
+  // others
+  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
+                         absl::Span<const int64_t> dimensions) const = 0;
+
  protected:
   Shape shape_;
-  size_t size_;
+  size_t size_;  // number of total elements
   std::vector<std::vector<size_t>> indicies_;
   size_t axis_0_,
       axis_1_;  // number of cipher texts, number of elements in a ciphertext
@@ -150,7 +178,7 @@ class Layout {
 
 class SimpleLayout : public Layout {
  public:
-  SimpleLayout(Shape& shape) : Layout(shape){};
+  SimpleLayout(const Shape& shape) : Layout(shape){};
   virtual void init() override;
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
@@ -176,11 +204,39 @@ class SimpleLayout : public Layout {
 
   virtual void add_in_place(Ptxt& one, double two) const override;
   virtual void multiply_in_place(Ptxt& one, double two) const override;
+
+  // matrix and vector operations
+
+  // dot is the general entry point
+  virtual Ctxt dot(const Ctxt& one, const Ptxt& two) const;
+  virtual Ctxt dot(const Ctxt& one, const Ctxt& two) const;
+  // Matrix multplication
+  virtual Ctxt mat_mult(const Ctxt& one, const Ptxt& two) const;
+  virtual Ctxt mat_mult(const Ctxt& one, const Ctxt& two) const;
+  // More general matrix multplication for hihger dimensional matrices
+  // see: https://www.tensorflow.org/xla/operation_semantics#dotgeneral, and
+  // https://en.wikipedia.org/wiki/Tensor_contraction
+  virtual Ctxt mat_mult_general(const Ctxt& one, const Ptxt& two) const;
+  virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const;
+
+  // others
+  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
+                         absl::Span<const int64_t> dimensions) const;
+
+ private:
+  template <class T, class U>
+  Ctxt dot_internal(const Ctxt& one, const T& two) const;
+
+  template <class T, class U>
+  Ctxt mat_mult_internal(const Ctxt& one, const T& two) const;
+
+  template <class T, class U>
+  Ctxt mat_mult_general_internal(const Ctxt& one, const T& two) const;
 };
 
 class BatchLayout : public Layout {
  public:
-  BatchLayout(Shape& shape) : Layout(shape){};
+  BatchLayout(const Shape& shape) : Layout(shape){};
   virtual void init() override;
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
@@ -206,11 +262,85 @@ class BatchLayout : public Layout {
 
   virtual void add_in_place(Ptxt& one, double two) const override;
   virtual void multiply_in_place(Ptxt& one, double two) const override;
+
+  // matrix and vector operations
+
+  // Dot product between two vectors
+  virtual Ctxt dot(const Ctxt& one, const Ctxt& two) const override;
+  virtual Ctxt dot(const Ctxt& one, const Ptxt& two) const override;
+  // Matrix multplication
+  virtual Ctxt mat_mult(const Ctxt& one, const Ctxt& two) const override;
+  virtual Ctxt mat_mult(const Ctxt& one, const Ptxt& two) const override;
+  // More general matrix multplication for hihger dimensional matrices
+  // see: https://www.tensorflow.org/xla/operation_semantics#dotgeneral, and
+  // https://en.wikipedia.org/wiki/Tensor_contraction
+  virtual Ctxt mat_mult_general(const Ctxt& one,
+                                const Ctxt& two) const override;
+  virtual Ctxt mat_mult_general(const Ctxt& one,
+                                const Ptxt& two) const override;
+
+  // others
+  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
+                         absl::Span<const int64_t> dimensions) const override;
 };
 
-Layout* createLayout(const char* type, Shape& shape);
+Layout* createLayout(const char* type, const Shape& shape);
 
-Layout* createLayout(const LAYOUT_TYPE type, Shape& shape);
+Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape);
+
+// helper functions
+
+// converts a python sytle index [x,y,z] into single index into the flat sotrage
+// vector
+size_t multi_index_to_flat(const std::vector<size_t>& index,
+                           const Shape& shape);
+
+xla::Shape create_xla_dummy_shape(const Shape& shape);
+
+// helper function that computes low level dot products. one and tow should be
+// std::pair that hold the start and end iterator to the vectors
+template <class T, class U>
+std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
+    const std::pair<T, T>& one, const std::pair<U, U>& two) {
+  // perform first multiplication
+  auto iter_one = one.first;
+  auto iter_two = two.first;
+  AS_LOG_S << "starting simple dot" << std::endl;
+  HECtxt* result = **(one.first) * two.first->get();
+#ifdef LAYOUT_DEBUG
+  const HEContext* context = result->getContext();
+  AS_LOG_S << "decrypted: " << context->decryptDouble(one.first->get())[0]
+           << " * " << context->decryptDouble(two.first->get())[0] << " = "
+           << context->decryptDouble(result)[0] << std::endl;
+#endif
+  // need to increment both iterator;
+  ++iter_one;
+  ++iter_two;
+  size_t i = 0;
+  for (; iter_one != one.second; ++iter_one, ++iter_two, i++) {
+    // need to create a temporary variable so we can free it later
+    AS_LOG_S << "performing product" << std::endl;
+    HECtxt* temp = **iter_one * iter_two->get();
+#ifdef LAYOUT_DEBUG
+    AS_LOG_S << "decrypted: " << context->decryptDouble(iter_one->get())[0]
+             << " * " << context->decryptDouble(iter_two->get())[0] << " = "
+             << context->decryptDouble(temp)[0] << std::endl;
+#endif
+    AS_LOG_S << "performing " << i << "th addition" << std::endl;
+#ifdef LAYOUT_DEBUG
+    AS_LOG_S << "decrypted: " << context->decryptDouble(result)[0] << " + "
+             << context->decryptDouble(temp)[0] << " = ";
+#endif
+    result->addInPlace(temp);
+#ifdef LAYOUT_DEBUG
+    AS_LOG_SA << context->decryptDouble(result)[0] << std::endl;
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
+        */
+    // we have taken ownership of the pointer and are now repsonible for it
+    delete temp;
+  }
+  return std::vector<std::shared_ptr<HECtxt>>{std::shared_ptr<HECtxt>(result)};
+}
 
 }  //  namespace aluminum_shark
 

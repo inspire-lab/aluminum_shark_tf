@@ -549,9 +549,6 @@ Status EagerServiceImpl::ExecuteOp(CallOptions* call_opts,
   }
 
   absl::FixedArray<tensorflow::TensorHandle*> retvals(num_retvals);
-  std::cout << "EagerServiceImpl::ExecuteOp "
-            << "ServerContext: Calling EagerExecute for op " << operation.id()
-            << std::endl;
   VLOG(3) << "ServerContext: Calling EagerExecute for op " << operation.id();
   TF_RETURN_IF_ERROR(op.Execute(
       absl::MakeSpan(

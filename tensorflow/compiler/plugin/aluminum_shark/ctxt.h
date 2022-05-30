@@ -1,6 +1,7 @@
 #ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_CTXT_H
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_CTXT_H
 
+#include <exception>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -13,9 +14,9 @@
 namespace aluminum_shark {
 
 // A class that wraps around a storage object which holds the actual data.
-// Needs to be cheap to copy which is why the storage object is held in a shared
-// pointer. But this means none of these objects actually exclusively own the
-// stored object.
+// Needs to be cheap to copy which is why the storage object is held in a
+// shared pointer. But this means none of these objects actually
+// exclusively own the stored object.
 //
 class Ctxt : public BaseTxt {
  public:
@@ -62,6 +63,11 @@ class Ctxt : public BaseTxt {
   std::shared_ptr<BaseTxt> operator*(double other);
   Ctxt& operator+=(double other);
   Ctxt& operator*=(double other);
+
+  // trys to decrypt the ctxt. if it doesnt work throws
+  // aluminum_shark::decryption_error
+  std::vector<double> decryptDouble() const;
+  std::vector<long> decryptLong() const;
 
  private:
   std::vector<std::shared_ptr<HECtxt>> value_;

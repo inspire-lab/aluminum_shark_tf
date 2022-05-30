@@ -21,9 +21,6 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/eager/placement_utils.h"
 #include "tensorflow/core/common_runtime/eager/tensor_handle.h"
 #include "tensorflow/core/platform/errors.h"
-
-extern bool AS_LOG_TF;
-
 namespace {
 
 bool IsCPU(tensorflow::Device* d) {
@@ -181,10 +178,7 @@ Status EagerOperation::Execute(absl::Span<AbstractTensorHandle*> retvals,
       TF_RETURN_IF_ERROR(down_cast<TensorHandle*>(handle)->WaitUnknownDevice());
     }
   }
-  if (AS_LOG_TF) {
-    std::cout << __FILE__ << ":" << __LINE__ << "EagerOperation::Execute"
-              << std::endl;
-  }
+
   // Run eager placement logic.
   class Device* device = absl::get<class Device*>(Device());
   if (device == nullptr) {
@@ -201,17 +195,7 @@ Status EagerOperation::Execute(absl::Span<AbstractTensorHandle*> retvals,
 
   if (device != nullptr) {
     SetDevice(device);
-    if (AS_LOG_TF) {
-      std::cout << __FILE__ << ":" << __LINE__
-                << " Device info:  " << device->name() << std::endl;
-      std::cout << "\t" << device->parsed_name() << std::endl;
-      std::cout << "\t" << device->device_type() << std::endl;
-    }
   } else {
-    if (AS_LOG_TF) {
-      std::cout << __FILE__ << ":" << __LINE__ << " Device is NULL "
-                << std::endl;
-    }
   }
   // At this point all inputs and outputs are TensorHandles associated with
   // physical devices.

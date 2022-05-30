@@ -67,7 +67,6 @@ void OpHandlerOperation::set_handler(OpHandler* handler) {
 
 Status OpHandlerOperation::Execute(absl::Span<AbstractTensorHandle*> retvals,
                                    int* num_retvals) {
-  std::cout << "OpHandlerOperation::Execute" << std::endl;
   if (handler_ == nullptr) {
     return WrapperOperation::Execute(retvals, num_retvals);
   } else {

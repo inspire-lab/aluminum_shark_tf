@@ -1943,8 +1943,21 @@ Status AluminumSharkHloEvaluator::HandleBroadcast(HloInstruction* broadcast) {
       evaluated_[broadcast],
       operand.Broadcast(broadcast->shape(), broadcast->dimensions()));
 
-  // TODO: proper broadcast
-  unwrapBaseTxt(broadcast, GetEvaluatedCtxtFor(broadcast->operand(0)));
+  // TODO RP: broadcasting for ciphertexts
+  try {
+    ::aluminum_shark::Ptxt& ptxt_operand =
+        dynamic_cast<::aluminum_shark::Ptxt&>(
+            GetEvaluatedCtxtFor(broadcast->operand(0)));
+    std::shared_ptr<::aluminum_shark::Ptxt> ptxt =
+        std::make_shared<::aluminum_shark::Ptxt>(
+            ptxt_operand.layout().broadcast(
+                ptxt_operand, xla_shape_to_shark_shape(broadcast->shape()),
+                broadcast->dimensions()));
+    unwrapBaseTxt(broadcast, ptxt);
+  } catch (const std::exception& e) {
+    AS_LOG_S << e.what() << std::endl;
+    throw e;
+  }
 
   return Status::OK();
 }
@@ -2742,5 +2755,12 @@ std::unique_ptr<Array2D<int32>> AluminumSharkHloEvaluator::MatmulArray2D(
   return MatmulArray2DImpl<int32>(
       lhs, rhs, __xla_cpu_runtime_EigenSingleThreadedMatMulS32);
 }
+
+::aluminum_shark::Shape xla_shape_to_shark_shape(const Shape& shape) {
+  ::aluminum_shark::Shape ret(shape.dimensions().begin(),
+                              shape.dimensions().end());
+  return ret;
+}
+
 }  // namespace aluminum_shark
 }  // namespace xla
