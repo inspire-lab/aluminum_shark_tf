@@ -38,8 +38,8 @@ class BaseTxt {
   virtual BaseTxt& operator+=(double other) = 0;
   virtual BaseTxt& operator*=(double other) = 0;
 
-  const Shape& shape();
-  const Layout& layout();
+  const Shape& shape() const;
+  const Layout& layout() const;
 
   virtual void updateLayout(std::shared_ptr<Layout> layout) = 0;
 
