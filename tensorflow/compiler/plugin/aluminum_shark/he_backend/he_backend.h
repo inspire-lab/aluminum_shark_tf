@@ -205,9 +205,14 @@ class HECtxt {
   virtual HECtxt* operator*(double other) = 0;
   virtual HECtxt* multInPlace(double other) = 0;
 
+  //Rotate
+  virtual HECtxt* rotate(int steps) = 0;
+  virtual HECtxt* rotInPlace(int steps) = 0;
+
  private:
   friend HEContext;
 };
+
 
 std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path);
 
