@@ -9,6 +9,7 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
+#include "tensorflow/compiler/xla/service/hlo_instructions.h"
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 
@@ -168,6 +169,9 @@ class Layout {
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
                          absl::Span<const int64_t> dimensions) const = 0;
 
+  virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
+                           xla::HloInstruction* hlo) const = 0;
+
  protected:
   Shape shape_;
   size_t size_;  // number of total elements
@@ -208,20 +212,24 @@ class SimpleLayout : public Layout {
   // matrix and vector operations
 
   // dot is the general entry point
-  virtual Ctxt dot(const Ctxt& one, const Ptxt& two) const;
+  virtual Ctxt dot(const Ctxt& one, const Ptxt& two) const override;
   virtual Ctxt dot(const Ctxt& one, const Ctxt& two) const;
   // Matrix multplication
-  virtual Ctxt mat_mult(const Ctxt& one, const Ptxt& two) const;
-  virtual Ctxt mat_mult(const Ctxt& one, const Ctxt& two) const;
+  virtual Ctxt mat_mult(const Ctxt& one, const Ptxt& two) const override;
+  virtual Ctxt mat_mult(const Ctxt& one, const Ctxt& two) const override;
   // More general matrix multplication for hihger dimensional matrices
   // see: https://www.tensorflow.org/xla/operation_semantics#dotgeneral, and
   // https://en.wikipedia.org/wiki/Tensor_contraction
-  virtual Ctxt mat_mult_general(const Ctxt& one, const Ptxt& two) const;
+  virtual Ctxt mat_mult_general(const Ctxt& one,
+                                const Ptxt& two) const override;
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const;
 
   // others
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                         absl::Span<const int64_t> dimensions) const;
+                         absl::Span<const int64_t> dimensions) const override;
+
+  virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
+                           xla::HloInstruction* hlo) const override;
 
  private:
   template <class T, class U>
@@ -282,6 +290,9 @@ class BatchLayout : public Layout {
   // others
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
                          absl::Span<const int64_t> dimensions) const override;
+
+  virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
+                           xla::HloInstruction* hlo) const override;
 };
 
 Layout* createLayout(const char* type, const Shape& shape);
@@ -296,6 +307,8 @@ size_t multi_index_to_flat(const std::vector<size_t>& index,
                            const Shape& shape);
 
 xla::Shape create_xla_dummy_shape(const Shape& shape);
+
+Shape xla_shape_to_shark_shape(const xla::Shape& shape);
 
 // helper function that computes low level dot products. one and tow should be
 // std::pair that hold the start and end iterator to the vectors
@@ -325,12 +338,14 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
     AS_LOG_S << "decrypted: " << context->decryptDouble(iter_one->get())[0]
              << " * " << context->decryptDouble(iter_two->get())[0] << " = "
              << context->decryptDouble(temp)[0] << std::endl;
-#endif
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
+        */
     AS_LOG_S << "performing " << i << "th addition" << std::endl;
 #ifdef LAYOUT_DEBUG
     AS_LOG_S << "decrypted: " << context->decryptDouble(result)[0] << " + "
              << context->decryptDouble(temp)[0] << " = ";
-#endif
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
+        */
     result->addInPlace(temp);
 #ifdef LAYOUT_DEBUG
     AS_LOG_SA << context->decryptDouble(result)[0] << std::endl;

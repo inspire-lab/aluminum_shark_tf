@@ -63,6 +63,10 @@ class Ptxt : public BaseTxt {
   Ptxt& operator+=(double other) override;
   Ptxt& operator*=(double other) override;
 
+  // TODO RP: template this
+  std::vector<double> decodeDouble() const;
+  std::vector<long> decodeLong() const;
+
  private:
   std::vector<std::shared_ptr<HEPtxt>> value_;
   std::string name_;

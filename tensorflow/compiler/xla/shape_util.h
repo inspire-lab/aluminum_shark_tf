@@ -847,7 +847,33 @@ class ShapeUtil {
     tensorflow::mutex mu;
     Status status;  // Guarded by mu
 
+    // // RP DEBUG
+    // std::cout << "stride config: " << std::endl;
+    // std::cout << "    base: [";
+    // for (auto i : base) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]\n    dimensions: [";
+    // for (auto i : count) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]\n    step: [";
+    // for (auto i : incr) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]" << std::endl;
+
+    // std::cout << "indexes: " << std::endl;
+
     while (n < rank) {
+      // // RP DEBUG
+      // std::cout << "    [ ";
+      // for (auto i : indexes) {
+      //   std::cout << i << ", ";
+      // }
+      // std::cout << " ] " << std::endl;
+      // // RP DEBUG
+
       if (pool != absl::nullopt) {
         pool->Schedule([indexes, &visitor_function, &mu, &status] {
           StatusOr<bool> result = visitor_function(indexes);

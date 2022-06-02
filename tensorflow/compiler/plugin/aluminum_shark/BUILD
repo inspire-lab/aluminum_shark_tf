@@ -45,6 +45,7 @@ cc_library(
         "//tensorflow/compiler/plugin/aluminum_shark/utils",
         "//tensorflow/compiler/plugin/aluminum_shark/utils:exception",
         "//tensorflow/compiler/xla:shape_util",
+        "//tensorflow/compiler/xla/service:hlo",
         "@com_google_absl//absl/types:span",
     ],
 )

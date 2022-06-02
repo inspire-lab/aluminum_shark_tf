@@ -1951,7 +1951,8 @@ Status AluminumSharkHloEvaluator::HandleBroadcast(HloInstruction* broadcast) {
     std::shared_ptr<::aluminum_shark::Ptxt> ptxt =
         std::make_shared<::aluminum_shark::Ptxt>(
             ptxt_operand.layout().broadcast(
-                ptxt_operand, xla_shape_to_shark_shape(broadcast->shape()),
+                ptxt_operand,
+                ::aluminum_shark::xla_shape_to_shark_shape(broadcast->shape()),
                 broadcast->dimensions()));
     unwrapBaseTxt(broadcast, ptxt);
   } catch (const std::exception& e) {
@@ -2005,6 +2006,22 @@ Status AluminumSharkHloEvaluator::HandleGetTupleElement(
 Status AluminumSharkHloEvaluator::HandleCopy(HloInstruction* copy) {
   TF_RET_CHECK(ShapeUtil::Compatible(copy->shape(), copy->operand(0)->shape()));
   evaluated_[copy] = GetEvaluatedLiteralFor(copy->operand(0)).Clone();
+
+  // cipher- and plaintext copy
+  ::aluminum_shark::BaseTxt& btxt = GetEvaluatedCtxtFor(copy->operand(0));
+  try {
+    // ctxt
+    ::aluminum_shark::Ctxt& ctxt = dynamic_cast<::aluminum_shark::Ctxt&>(btxt);
+    evaluated_ctxt_[copy] = ctxt.deepCopy();
+  } catch (const std::bad_cast& e) {
+    // ptxt
+    ::aluminum_shark::Ptxt& ptxt = dynamic_cast<::aluminum_shark::Ptxt&>(btxt);
+    constant_ptxt_[copy] = ptxt.deepCopy();
+  } catch (const std::exception& e) {
+    AS_LOG_S << e.what() << std::endl;
+    throw e;
+  }
+
   return Status::OK();
 }
 
@@ -2754,12 +2771,6 @@ std::unique_ptr<Array2D<int32>> AluminumSharkHloEvaluator::MatmulArray2D(
     const Array2D<int32>& lhs, const Array2D<int32>& rhs) {
   return MatmulArray2DImpl<int32>(
       lhs, rhs, __xla_cpu_runtime_EigenSingleThreadedMatMulS32);
-}
-
-::aluminum_shark::Shape xla_shape_to_shark_shape(const Shape& shape) {
-  ::aluminum_shark::Shape ret(shape.dimensions().begin(),
-                              shape.dimensions().end());
-  return ret;
 }
 
 }  // namespace aluminum_shark

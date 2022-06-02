@@ -1126,6 +1126,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Shape& lhs_shape = lhs_literal.shape();
     const Shape& rhs_shape = rhs_literal.shape();
 
+    AS_LOG_S << "convultion, lhs_shape: " << lhs_shape.ToString()
+             << " , rhs_shape: " << rhs_shape.ToString()
+             << " , result_shape: " << result_shape.ToString() << std::endl;
+
     TF_CHECK_OK(ShapeUtil::ValidateShape(lhs_shape));
     TF_CHECK_OK(ShapeUtil::ValidateShape(rhs_shape));
     CHECK(lhs_shape.IsArray());
@@ -1294,8 +1298,15 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
     Literal result(result_shape);
     TF_RETURN_IF_ERROR(result.PopulateParallel<ReturnT>(func));
-
     parent_->evaluated_[conv] = std::move(result);
+
+    AS_LOG_S << "convolution on encrypted data" << std::endl;
+    ::aluminum_shark::Ctxt& lhs_ctxt = dynamic_cast<::aluminum_shark::Ctxt&>(
+        parent_->GetEvaluatedCtxtFor(conv->operand(0)));
+    ::aluminum_shark::Ptxt& rhs_ptxt = dynamic_cast<::aluminum_shark::Ptxt&>(
+        parent_->GetEvaluatedCtxtFor(conv->operand(1)));
+    parent_->evaluated_ctxt_[conv] =
+        lhs_ctxt.layout().convolution(lhs_ctxt, rhs_ptxt, conv);
     return Status::OK();
   }
 

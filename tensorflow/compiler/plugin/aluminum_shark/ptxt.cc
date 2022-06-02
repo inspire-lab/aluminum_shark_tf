@@ -179,4 +179,34 @@ Ptxt& Ptxt::operator*=(double other) {
   return *this;
 }
 
+// TODO RP: template this
+std::vector<double> Ptxt::decodeDouble() const {
+  std::vector<std::vector<double>> decodings;
+  for (const auto& heptxt : value_) {
+    decodings.push_back(heptxt->getContext()->decodeDouble(heptxt.get()));
+  }
+  std::vector<double> vec = layout().reverse_layout_vector(decodings);
+  AS_LOG_S << "Decoded Double. Values: [ ";
+  if (log()) {
+    aluminum_shark::stream_vector(vec);
+  }
+  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
+  return vec;
+}
+
+// TODO RP: template this
+std::vector<long> Ptxt::decodeLong() const {
+  std::vector<std::vector<long>> decodings;
+  for (const auto& heptxt : value_) {
+    decodings.push_back(heptxt->getContext()->decodeLong(heptxt.get()));
+  }
+  std::vector<long> vec = layout().reverse_layout_vector(decodings);
+  AS_LOG_S << "Decoded long. Values: [ ";
+  if (log()) {
+    aluminum_shark::stream_vector(vec);
+  }
+  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
+  return vec;
+}
+
 }  // namespace aluminum_shark

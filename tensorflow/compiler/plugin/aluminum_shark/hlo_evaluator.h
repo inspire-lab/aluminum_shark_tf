@@ -49,8 +49,6 @@ limitations under the License.
 namespace xla {
 namespace aluminum_shark {
 
-::aluminum_shark::Shape xla_shape_to_shark_shape(const Shape& shape);
-
 // Responsible for evaluating HLO and obtain literal as the evaluation
 // results.
 //
@@ -643,7 +641,8 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
     AS_LOG_SA << std::endl;
     // layout vector correctly
     // first we take the shape
-    ::aluminum_shark::Shape shape = xla_shape_to_shark_shape(literal.shape());
+    ::aluminum_shark::Shape shape =
+        ::aluminum_shark::xla_shape_to_shark_shape(literal.shape());
     ::aluminum_shark::Layout* layout =
         ::aluminum_shark::createLayout(layout_type, shape);
     std::vector<std::vector<PtxtType>> layed_out = layout->layout_vector(vec);

@@ -33,6 +33,26 @@ const LAYOUT_TYPE string_to_layout_type(const char* name) {
   return LAYOUT_TYPE::UNSUPPORTED;
 }
 
+// things taken from hlo_evaluator_typed_visitor.h
+// Creates a vector of multipliers which can be used to create a linear index
+// into shape.
+//
+// Given the multidimensional index {i1, ..., iN} and
+// M = MakeDimMultipliers(shape), the corresponding linear index LI is simply
+//
+//   LI = i1 * M[1] + i2 * M[2] + ... + iN * M[N].
+//
+// This lets you calculate LI given the multidimensional indices in any order.
+static xla::DimensionVector MakeDimMultipliers(const xla::Shape& shape) {
+  xla::DimensionVector v(shape.rank());
+  int64_t scale = 1;
+  for (auto dim : xla::LayoutUtil::MinorToMajor(shape)) {
+    v[dim] = scale;
+    scale *= shape.dimensions(dim);
+  }
+  return v;
+}
+
 // Base
 
 Layout::Layout(const Shape& shape) : shape_(shape) {
@@ -84,7 +104,8 @@ void SimpleLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
 
 void SimpleLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
   AS_LOG_S << "multiplying " << one.getName() << ", " << two.getName()
-           << std::endl;
+           << " value sizes: " << one.getValue().size() << " and "
+           << two.getValue().size() << std::endl;
   for (size_t i = 0; i < size_; ++i) {
     one.getValue()[i]->multInPlace(two.getValue()[i].get());
   }
@@ -95,12 +116,25 @@ void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
   // on the fly
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
-  AS_LOG_S << "simple layout add in place, value sizes: " << one_v.size()
-           << " and " << two_v.size() << std::endl;
-  for (size_t i = 0; i < size_; ++i) {
-    AS_LOG_S << "ctxt: " << one_v[i]->to_string() << std::endl;
-    AS_LOG_S << "ptxt: " << two_v[i]->to_string() << std::endl;
-    one_v[i]->addInPlace(two_v[i].get());
+  try {
+    AS_LOG_S << "simple layout add in place, value sizes: " << one_v.size()
+             << " and " << two_v.size() << std::endl;
+    for (size_t i = 0; i < size_; ++i) {
+      AS_LOG_S << "ctxt: " << one_v[i]->to_string() << std::endl;
+      AS_LOG_S << "ptxt: " << two_v[i]->to_string() << std::endl;
+      one_v[i]->addInPlace(two_v[i].get());
+    }
+  } catch (const std::exception& e) {
+    AS_LOG_S << "add Inplace failed reason: " << e.what() << std::endl;
+    AS_LOG_SA << "    ctxt: shape: ";
+    stream_vector(one.shape());
+    AS_LOG_SA << " ";
+    stream_vector(one.decryptDouble()) << std::endl;
+    AS_LOG_SA << "    ptxt: shape: ";
+    stream_vector(two.shape());
+    AS_LOG_SA << " ";
+    stream_vector(two.decodeDouble()) << std::endl;
+    throw e;
   }
   AS_LOG_S << "add in place done " << std::endl;
 }
@@ -378,22 +412,6 @@ Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
   // we'll iterate over this
   AS_LOG_S << "broadcasting " << std::endl;
   auto broadcast_dim = dimensions[0];
-  // Shape idxs(result_shape.size(), 0);
-  // for (size_t dim = 0; dim < result_shape.size(); ++dim) {
-  //   if (dim == broadcast_dim) {
-  //     for (size_t i = 0; i < result_shape[broadcast_dim]; ++i) {
-  //       idxs[broadcast_dim] = i;
-  //       AS_LOG_S << "";
-  //       stream_vector(idxs);
-  //       AS_LOG_SA << std::endl;
-  //       size_t start = multi_index_to_flat(idxs, result_shape);
-  //       size_t size = ptxt.layout().size();
-  //       AS_LOG_S << "start: " << start << " size: " << size << std::endl;
-  //       std::copy(ptxt_v.begin(), ptxt_v.begin() + size,
-  //                 result_ptxts.begin() + start);
-  //     }
-  //   }
-  // }
 
   // this is pretty much a copy of xla::Literl::Broadcast. just made some
   // modificitons that fit our purposes
@@ -435,6 +453,205 @@ Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
       });
 
   return Ptxt(result_ptxts, result_layout, ptxt.getName() + " broadcast");
+}
+
+Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
+                               xla::HloInstruction* hlo) const {
+  // this is an adapted copy of
+  // xla::HloEvaluatorTypedVisitor::ConvolutionWithLiterals
+  const auto& window = hlo->window();
+  const xla::Shape& result_shape = hlo->shape();
+  const xla::Shape& lhs_shape = hlo->operand(0)->shape();
+  const xla::Shape& rhs_shape = hlo->operand(1)->shape();
+
+  TF_CHECK_OK(xla::ShapeUtil::ValidateShape(lhs_shape));
+  TF_CHECK_OK(xla::ShapeUtil::ValidateShape(rhs_shape));
+
+  const auto& dnums = hlo->convolution_dimension_numbers();
+  const int64_t num_spatial_dims = dnums.output_spatial_dimensions_size();
+  CHECK_EQ(num_spatial_dims, dnums.input_spatial_dimensions_size());
+  CHECK_EQ(num_spatial_dims, dnums.kernel_spatial_dimensions_size());
+  CHECK_GE(num_spatial_dims, 0);
+  CHECK_EQ(window.dimensions_size(), num_spatial_dims);
+
+  std::vector<int64_t> window_dimension_sizes;
+  for (auto i : dnums.kernel_spatial_dimensions()) {
+    window_dimension_sizes.push_back(
+        xla::ShapeUtil::GetDimension(rhs_shape, i));
+  }
+
+  const xla::Shape& window_shape = xla::ShapeUtil::MakeShape(
+      rhs_shape.element_type(), window_dimension_sizes);
+
+  xla::DimensionVector lhs_dim_multipliers = MakeDimMultipliers(lhs_shape);
+  xla::DimensionVector rhs_dim_multipliers = MakeDimMultipliers(rhs_shape);
+
+  auto& lhs_v = lhs.getValue();
+  auto& rhs_v = rhs.getValue();
+
+  const int64_t feature_group_count = hlo->feature_group_count();
+  const int64_t batch_group_count = hlo->batch_group_count();
+
+  auto func = [&window_shape, &dnums, &lhs_shape, &rhs_shape, &window,
+               &lhs_dim_multipliers, &rhs_dim_multipliers, &lhs_v, &rhs_v,
+               feature_group_count,
+               batch_group_count](const absl::Span<const int64_t> out_index) {
+    // Dimension number applicable for input (lhs).
+    const int64_t input_batch_dim = dnums.input_batch_dimension();
+    const int64_t input_z_dim = dnums.input_feature_dimension();
+    // Dimension number applicable for kernel (rhs).
+    const int64_t kernel_input_z_dim = dnums.kernel_input_feature_dimension();
+    const int64_t kernel_output_z_dim = dnums.kernel_output_feature_dimension();
+    // Dimension number applicable for output.
+    const int64_t output_batch_dim = dnums.output_batch_dimension();
+    const int64_t output_z_dim = dnums.output_feature_dimension();
+
+    const int64_t input_z_size =
+        xla::ShapeUtil::GetDimension(lhs_shape, input_z_dim);
+
+    const int64_t input_batch_size =
+        xla::ShapeUtil::GetDimension(lhs_shape, input_batch_dim);
+
+    const int64_t batch_group_size = input_batch_size / batch_group_count;
+
+    // The size of an input feature group.
+    const int64_t input_feature_group_size = input_z_size / feature_group_count;
+
+    const int64_t output_z_size =
+        xla::ShapeUtil::GetDimension(rhs_shape, kernel_output_z_dim);
+    // The output feature dimension is a concatenation of convolution results
+    // from the different groups.
+    const int64_t output_feature_group_size =
+        output_z_size / feature_group_count;
+
+    // Calculate the group index to which the current output index
+    // belongs.
+    const int64_t feature_group_index =
+        out_index[output_z_dim] / output_feature_group_size;
+
+    const int64_t depthwise_multiplier =
+        batch_group_count > 1 ? output_z_size / input_batch_size : 1;
+    const int64_t batch_group_index =
+        out_index[output_z_dim] / depthwise_multiplier;
+
+    xla::DimensionVector rhs_spatial_index(
+        dnums.kernel_spatial_dimensions_size(), 0);
+
+    bool first = true;
+    HECtxt* result = nullptr;
+
+    // Convolve input feature with kernel.
+    // The mechanism indexes into the correct LHS (input) and RHS (kernel)
+    // locations and accumulates multiplications for a given output index.
+    do {
+      // Find corresponding spatial dimension index for input (lhs).
+      int64_t lhs_linear_spatial_index = 0;
+      int64_t rhs_linear_spatial_index = 0;
+      for (int64_t ki = 0; ki < rhs_spatial_index.size(); ++ki) {
+        // Spatial dimension number for input (lhs) and output.
+        const int64_t input_spatial_dim = dnums.input_spatial_dimensions(ki);
+        const int64_t output_spatial_dim = dnums.output_spatial_dimensions(ki);
+
+        // Calculate lhs (input) index without taking base dilation into
+        // account.
+        const auto& window_dim = window.dimensions(ki);
+        const int64_t undilated_index =
+            out_index[output_spatial_dim] * window_dim.stride() -
+            window_dim.padding_low() +
+            rhs_spatial_index[ki] * window_dim.window_dilation();
+        // Skip if the lhs (input) index is to be dilated.  As an
+        // optimization, skip this mod if there's no dilation.
+        if (window_dim.base_dilation() > 1 &&
+            undilated_index % window_dim.base_dilation() != 0) {
+          goto cnt;
+        }
+
+        // Calculate the actual lhs (input) index after dilation.  As an
+        // optimization, skip this integer divide if there's no dilation.
+        int64_t lhs_spatial_index;
+        if (window_dim.base_dilation() > 1) {
+          lhs_spatial_index = undilated_index / window_dim.base_dilation();
+        } else {
+          lhs_spatial_index = undilated_index;
+        }
+
+        // Skip if input index is not in bounds.
+        if (!(lhs_spatial_index >= 0 &&
+              lhs_spatial_index < lhs_shape.dimensions(input_spatial_dim))) {
+          goto cnt;
+        }
+
+        lhs_linear_spatial_index +=
+            lhs_spatial_index * lhs_dim_multipliers[input_spatial_dim];
+        rhs_linear_spatial_index +=
+            (window_dim.window_reversal()
+                 ? ((window_dim.size() - 1) - rhs_spatial_index[ki])
+                 : rhs_spatial_index[ki]) *
+            rhs_dim_multipliers[dnums.kernel_spatial_dimensions(ki)];
+      }
+
+      for (int64_t rhs_iz = 0; rhs_iz < input_feature_group_size; ++rhs_iz) {
+        const int64_t iz =
+            feature_group_index * input_feature_group_size + rhs_iz;
+
+        int64_t lhs_linear_index = lhs_linear_spatial_index;
+        lhs_linear_index +=
+            out_index[output_batch_dim] * lhs_dim_multipliers[input_batch_dim];
+
+        // We are scraping only the diagonal elements in the resultant
+        // convolution output when batch_group_count is greater than 1,
+        // where 1 is the default. No scraping is done in that case.
+        // This approach works out automatically for 'groups' in batches
+        // with group_size > 1, because we already descend down the batch
+        // dimension for the 'output_batch_dim' above.
+        lhs_linear_index +=
+            ((batch_group_index * batch_group_size) % input_batch_size) *
+            lhs_dim_multipliers[input_batch_dim];
+
+        lhs_linear_index += iz * lhs_dim_multipliers[input_z_dim];
+        int64_t rhs_linear_index = rhs_linear_spatial_index;
+
+        rhs_linear_index +=
+            out_index[output_z_dim] * rhs_dim_multipliers[kernel_output_z_dim];
+        rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
+
+        HECtxt* temp =
+            *(lhs_v[lhs_linear_index]) * rhs_v[rhs_linear_index].get();
+        if (first) {
+          result = temp;
+          first = false;
+        } else {
+          result->addInPlace(temp);
+          delete temp;
+        }
+      }
+    cnt : {}
+    } while (xla::IndexUtil::BumpIndices(window_shape,
+                                         absl::MakeSpan(rhs_spatial_index)));
+
+    return result;
+  };
+
+  // create the result object
+  Layout* layout =
+      createLayout(LAYOUT_TYPE::SIMPLE, xla_shape_to_shark_shape(result_shape));
+
+  std::vector<std::shared_ptr<HECtxt>> ctxt_vector(layout->size());
+  // populate the ctxt vector
+  std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
+  std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
+  xla::ShapeUtil::ForEachIndexParallel(
+      result_shape, /*base*/ base_vec, /*count*/ result_shape.dimensions(),
+      /*increment*/ incr_vec,
+      [&ctxt_vector, &result_shape,
+       &func](const absl::Span<const int64_t> multi_index) {
+        auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+            result_shape, multi_index);
+        ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+      });
+
+  return Ctxt(ctxt_vector, std::shared_ptr<Layout>(layout),
+              "conv(" + lhs.getName() + ")");
 }
 
 // template instantiation
@@ -598,6 +815,12 @@ Ptxt BatchLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
   throw std::logic_error("not implemented yet");
 }
 
+Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
+                              xla::HloInstruction* hlo) const {
+  AS_LOG_S << "not implemented yet" << std::endl;
+  throw std::logic_error("not implemented yet");
+}
+
 // Free functions
 
 Layout* createLayout(const char* type, const Shape& shape) {
@@ -656,6 +879,11 @@ xla::Shape create_xla_dummy_shape(const Shape& shape) {
   return xla::ShapeUtil::MakeShape(
       xla::PrimitiveType::F32,
       absl::Span<const int64_t>(cast_v.data(), cast_v.size()));
+}
+
+Shape xla_shape_to_shark_shape(const xla::Shape& shape) {
+  Shape ret(shape.dimensions().begin(), shape.dimensions().end());
+  return ret;
 }
 
 }  // namespace aluminum_shark

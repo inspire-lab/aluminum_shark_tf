@@ -1115,6 +1115,23 @@ Status MutableLiteralBase::PopulateInternal(const FnType& generator,
         literal_data.at(index + i) = generator(minor_scan_indexes);
       }
     };
+    // // RP DEBUG
+    // std::cout << "stride config: " << std::endl;
+    // std::cout << "    base: [";
+    // for (auto i : stride_config.base) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]\n    dimensions: [";
+    // for (auto i : stride_config.dimensions) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]\n    step: [";
+    // for (auto i : stride_config.step) {
+    //   std::cout << i << ", ";
+    // }
+    // std::cout << "]\n    minor_dimension: " << stride_config.minor_dimension
+    //           << std::endl;
+
     if (parallel) {
       ShapeUtil::ForEachIndexParallel(this_shape, stride_config.base,
                                       stride_config.dimensions,
