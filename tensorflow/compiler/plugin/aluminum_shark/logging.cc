@@ -11,6 +11,7 @@ namespace {
 bool log_on = std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr
                   ? false
                   : std::stoi(std::getenv("ALUMINUM_SHARK_LOGGING")) == 1;
+int log_level = aluminum_shark::AS_WARNING;
 }  // namespace
 
 namespace aluminum_shark {
@@ -39,6 +40,10 @@ void enable_logging(bool activate) {
 }
 
 bool log() { return log_on; }
+
+bool log(int level) { return level >= log_level; }
+
+void set_log_level(int level) { log_level = level; }
 
 NullStream& nullstream() {
   static NullStream nullstream;

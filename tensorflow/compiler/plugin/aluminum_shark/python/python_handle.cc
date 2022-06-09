@@ -129,6 +129,8 @@ const char* ComputationHandle::getForcedLayout() const {
 /*  C API              */
 /***********************/
 
+using ::aluminum_shark::operator<<;
+
 // need as reverse mapping to return the context handle when the ctxt result is
 // retrieved
 static std::map<const aluminum_shark::HEContext*, aluminum_shark_Context*>
@@ -300,24 +302,16 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
       static_cast<aluminum_shark_Context*>(context_ptr);
   // read input values
   std::vector<double> ptxt_vec(values, values + size);
-  AS_LOG_S << "input pointer: " << reinterpret_cast<const void*>(values)
-           << std::endl;
-  AS_LOG_S << "vector pointer: " << reinterpret_cast<void*>(ptxt_vec.data())
-           << std::endl;
-  AS_LOG_S << "Encrypting Double. Values: ";
-  if (aluminum_shark::log()) {
-    aluminum_shark::stream_vector(ptxt_vec);
-  }
-  AS_LOG_SA << " number of values (passed/read) " << size << "/"
-            << ptxt_vec.size() << ", name: " << name << std::endl;
+  AS_LOG_DEBUG << "Encrypting Double. Values: " << ptxt_vec << std::endl;
+
+  AS_LOG_INFO << "number of values (passed/read) " << size << "/"
+              << ptxt_vec.size() << ", name: " << name << std::endl;
 
   // read shape and create layout
-  AS_LOG_S << "Creating layout, shape: " << shape << ", " << shape_size
-           << std::endl;
+  AS_LOG_INFO << "Creating layout, shape: " << shape << ", " << shape_size
+              << std::endl;
   std::vector<size_t> shape_vec(shape, shape + shape_size);
-  if (aluminum_shark::log()) {
-    aluminum_shark::stream_vector(shape_vec);
-  }
+
   AS_LOG_S << "layout: " << layout_type << std::endl;
   aluminum_shark::Layout* layout =
       aluminum_shark::createLayout(layout_type, shape_vec);
@@ -419,8 +413,7 @@ void aluminum_shark_EnableLogging(bool on) {
 
 // sets the log level
 void aluminum_shark_SetLogLevel(int level) {
-  // TODO RP: implement. does nothing yet.
-  AS_LOG_S << "Log levels do nothing yet";
+  aluminum_shark::set_log_level(level);
 }
 
 }  // extern "C"

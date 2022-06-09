@@ -103,12 +103,13 @@ class Layout {
     // copy values into return vector
     AS_LOG_S << "laying out vector with size " << vec.size() << " have "
              << indicies_.size() << " indicies" << std::endl;
-    AS_LOG_S << "ret_vec.size() = " << ret_vec.size() << std::endl;
+    AS_LOG_DEBUG << "ret_vec.size() = " << ret_vec.size() << std::endl;
     for (size_t i = 0; i < vec.size(); ++i) {
       const auto& idx = indicies_[i];
-      AS_LOG_S << "i" << i << " -> " << idx[0] << " ," << idx[1] << std::endl;
-      AS_LOG_S << "ret_vec[" << idx[0]
-               << "].size() = " << ret_vec[idx[0]].size() << std::endl;
+      AS_LOG_DEBUG << "i" << i << " -> " << idx[0] << " ," << idx[1]
+                   << std::endl;
+      AS_LOG_DEBUG << "ret_vec[" << idx[0]
+                   << "].size() = " << ret_vec[idx[0]].size() << std::endl;
       ret_vec[idx[0]][idx[1]] = vec[i];
     }
     return ret_vec;
@@ -123,8 +124,10 @@ class Layout {
     AS_LOG_S << "reverse layout" << std::endl;
     for (size_t i = 0; i < ret_vec.size(); ++i) {
       const auto& idx = indicies_[i];
-      AS_LOG_S << "ret[" << i << "] = vec[" << idx[0] << "][" << idx[1] << "]"
-               << std::endl;
+      if (log(AS_DEBUG)) {
+        AS_LOG_DEBUG << "ret[" << i << "] = vec[" << idx[0] << "][" << idx[1]
+                     << "]" << std::endl;
+      }
       ret_vec[i] = vec[idx[0]][idx[1]];
     }
     return ret_vec;

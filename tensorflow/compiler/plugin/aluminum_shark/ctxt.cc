@@ -20,11 +20,11 @@ Ctxt::Ctxt(std::vector<std::shared_ptr<HECtxt>> hectxt,
 Ctxt Ctxt::deepCopy() const {
   AS_LOG("creating deep copy of: " + name_);
   Ctxt copy = *this;
-  AS_LOG_S << "copyt created" << std::endl;
+  AS_LOG_S << "copy created" << std::endl;
   // create a copy of the stored object
   std::vector<std::shared_ptr<HECtxt>> hectxt_copy;
   for (auto hectxt : value_) {
-    AS_LOG_S << "copying HECtxt" << std::endl;
+    // AS_LOG_S << "copying HECtxt" << std::endl;
     hectxt_copy.push_back(std::shared_ptr<HECtxt>(hectxt->deepCopy()));
   }
   copy.setValue(hectxt_copy);
@@ -205,11 +205,13 @@ std::vector<double> Ctxt::decryptDouble() const {
     decryptions.push_back(getContext()->decryptDouble(hectxt.get()));
   }
   std::vector<double> vec = layout().reverse_layout_vector(decryptions);
-  AS_LOG_S << "Decrypted Double. Values: [ ";
-  if (log()) {
-    aluminum_shark::stream_vector(vec);
+  AS_LOG_INFO << "Decrypted Double number of values: " << vec.size()
+              << std::endl;
+
+  if (log(AS_DEBUG)) {
+    AS_LOG_DEBUG << "Decrypted Double. Values: [ " << vec
+                 << " number of values: " << vec.size() << std::endl;
   }
-  AS_LOG_SA << "number of values: " << vec.size() << std::endl;
   return vec;
 }
 

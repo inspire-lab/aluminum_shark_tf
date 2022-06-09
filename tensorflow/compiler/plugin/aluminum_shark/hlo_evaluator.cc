@@ -301,11 +301,12 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
       VLOG(100) << instr->name() << " = " << GetEvaluatedLiteralFor(instr);
     }
   }
-  ss.str("");
-  for (const HloInstruction* instr : computation.instructions()) {
-    ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    for (const HloInstruction* instr : computation.instructions()) {
+      ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
+    }
+    AS_LOG(ss.str());
   }
-  AS_LOG(ss.str());
 
   // invoke result callback
   auto result_ctxt = static_cast<::aluminum_shark::Ctxt&>(

@@ -96,12 +96,9 @@ void SimpleLayout::init() {
   }
   axis_0_ = size_;
   axis_1_ = 1;
-  AS_LOG_S << "Created layout indices " << indicies_.size() << std::endl;
-  for (const auto& v : indicies_) {
-    if (log()) {
-      stream_vector(v);
-    }
-    AS_LOG_SA << std::endl;
+  AS_LOG_INFO << "Created layout indices " << indicies_.size() << std::endl;
+  if (log(AS_DEBUG)) {
+    AS_LOG_DEBUG << indicies_ << std::endl;
   }
 }
 
@@ -460,8 +457,8 @@ Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
         // memcpy(dest_data + primitive_size * dest_index,
         //        source_data + primitive_size * source_index, primitive_size);
         // this where the acutall broadcasting happens
-        AS_LOG_S << "copying from " << source_index << " to " << dest_index
-                 << std::endl;
+        AS_LOG_DEBUG << "copying from " << source_index << " to " << dest_index
+                     << std::endl;
         result_ptxts[dest_index] = ptxt_v[source_index];
         return true;
       });

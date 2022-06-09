@@ -219,9 +219,8 @@ std::vector<double> Ptxt::decodeDouble() const {
     decodings.push_back(heptxt->getContext()->decodeDouble(heptxt.get()));
   }
   std::vector<double> vec = layout().reverse_layout_vector(decodings);
-  AS_LOG_S << "Decoded long. Values: [ ";
-  if (log()) {
-    aluminum_shark::stream_vector(vec);
+  if (log(AS_DEBUG)) {
+    AS_LOG_DEBUG << "Decoded long. Values:  " << vec << std::endl;
   }
   AS_LOG_SA << "number of values: " << vec.size() << std::endl;
   return vec;

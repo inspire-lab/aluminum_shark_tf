@@ -49,6 +49,8 @@ limitations under the License.
 namespace xla {
 namespace aluminum_shark {
 
+using ::aluminum_shark::operator<<;
+
 // Responsible for evaluating HLO and obtain literal as the evaluation
 // results.
 //
@@ -144,11 +146,11 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       if (context != nullptr) {
         if (i < ctxts.size()) {
           ::aluminum_shark::Ctxt ctxt = ctxts[i];
-          AS_LOG_S << "Input Literal to Ctxt: " << l.ToStringOneline() << " -> "
-                   << ctxt.getName() << std::endl;
+          AS_LOG_INFO << "Input Literal to Ctxt: " << l.shape().ToString()
+                      << " -> " << ctxt.getName() << std::endl;
           arg_ctxts_[i] = ctxt;
         } else {
-          AS_LOG_S << "Input Literal to Ptxt: " << l.ToStringOneline()
+          AS_LOG_S << "Input Literal to Ptxt: " << l.shape().ToString()
                    << std::endl;
           arg_ptxts_[i] = convertLiteralToPtxt(l, "arg" + std::to_string(i),
                                                context, layout_type);
@@ -636,9 +638,7 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
         typename ::xla::primitive_util::PrimitiveTypeToNative<LiteralT>::type>(
         index);
     std::vector<PtxtType> vec(data.begin(), data.end());
-    AS_LOG_SA << "\tconverted vector: ";
-    ::aluminum_shark::print_vector(vec);
-    AS_LOG_SA << std::endl;
+    // AS_LOG_DEBUG << "converted vector: " << vec << std::endl;
     // layout vector correctly
     // first we take the shape
     ::aluminum_shark::Shape shape =

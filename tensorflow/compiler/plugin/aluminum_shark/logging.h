@@ -28,8 +28,17 @@ void log(const char* file, int line, const std::string message);
 void enable_logging(bool activate);
 
 bool log();
+bool log(int level);
+
+void set_log_level(int level);
 
 NullStream& nullstream();
+
+constexpr int AS_CRITICAL = 50;
+constexpr int AS_ERROR = 40;
+constexpr int AS_WARNING = 30;
+constexpr int AS_INFO = 20;
+constexpr int AS_DEBUG = 10;
 
 }  // namespace aluminum_shark
 
@@ -42,6 +51,32 @@ NullStream& nullstream();
 // append to stream
 #define AS_LOG_SA \
   (::aluminum_shark::log() ? std::cout : ::aluminum_shark::nullstream())
+
+#define AS_LOG_CRITICAL                                 \
+  (::aluminum_shark::log(::aluminum_shark::AS_CRITICAL) \
+       ? std::cout                                      \
+       : ::aluminum_shark::nullstream())                \
+      << "Aluminum Shark CRITICAL: " << __FILE__ << ":" << __LINE__ << "] "
+#define AS_LOG_ERROR                                 \
+  (::aluminum_shark::log(::aluminum_shark::AS_ERROR) \
+       ? std::cout                                   \
+       : ::aluminum_shark::nullstream())             \
+      << "Aluminum Shark ERROR: " << __FILE__ << ":" << __LINE__ << "] "
+#define AS_LOG_WARNING                                 \
+  (::aluminum_shark::log(::aluminum_shark::AS_WARNING) \
+       ? std::cout                                     \
+       : ::aluminum_shark::nullstream())               \
+      << "Aluminum Shark WARNING: " << __FILE__ << ":" << __LINE__ << "] "
+#define AS_LOG_INFO                                 \
+  (::aluminum_shark::log(::aluminum_shark::AS_INFO) \
+       ? std::cout                                  \
+       : ::aluminum_shark::nullstream())            \
+      << "Aluminum Shark INFO: " << __FILE__ << ":" << __LINE__ << "] "
+#define AS_LOG_DEBUG                                 \
+  (::aluminum_shark::log(::aluminum_shark::AS_DEBUG) \
+       ? std::cout                                   \
+       : ::aluminum_shark::nullstream())             \
+      << "Aluminum Shark DEBUG: " << __FILE__ << ":" << __LINE__ << "] "
 
 #endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LOGGING_H \
         */
