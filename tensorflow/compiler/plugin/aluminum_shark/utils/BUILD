@@ -11,7 +11,9 @@ package(
 
 cc_library(
     name = "utils",
+    srcs = ["utils.cc"],
     hdrs = ["utils.h"],
+    deps = ["//tensorflow/compiler/plugin/aluminum_shark:logging"],
 )
 
 cc_library(
