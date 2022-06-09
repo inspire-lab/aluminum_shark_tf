@@ -58,7 +58,39 @@ std::string Ptxt::to_string() const {
 }
 
 void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
-  // TODO:
+  AS_LOG_S << "updating layout for " << name_ << " from " << *layout_ << " to "
+           << *layout << std::endl;
+  AS_LOG_S << "number of values in the plaintext: " << value_.size()
+           << std::endl;
+  const HEContext* context = value_[0]->getContext();
+  AS_LOG_S << "got context: " << context->to_string() << " @"
+           << reinterpret_cast<const void*>(context) << std::endl;
+  if (context->scheme() == HE_SCHEME::CKKS) {
+    AS_LOG_S << "CKKS layout update " << std::endl;
+    std::vector<std::vector<double>> ptxt_with_layout =
+        layout->layout_vector(decodeDouble());
+    value_.clear();
+    for (const auto& ptxt : ptxt_with_layout) {
+      std::shared_ptr<HEPtxt> ptxt_ptr(
+          std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+      value_.push_back(ptxt_ptr);
+    }
+  } else if (context->scheme() == HE_SCHEME::BFV) {
+    std::vector<std::vector<long>> ptxt_with_layout =
+        layout->layout_vector(decodeLong());
+    value_.clear();
+    for (const auto& ptxt : ptxt_with_layout) {
+      std::shared_ptr<HEPtxt> ptxt_ptr(
+          std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+      value_.push_back(ptxt_ptr);
+    }
+  } else {
+    AS_LOG_S << "unsopported scheme encountered in updating plaintext layout: "
+             << context->scheme() << std::endl;
+    throw std::runtime_error(
+        "unsopported scheme encountered in updating plaintext layout");
+  }
+  layout_ = layout;
 }
 
 std::shared_ptr<BaseTxt> Ptxt::operator+(const BaseTxt& other) const {
@@ -181,12 +213,13 @@ Ptxt& Ptxt::operator*=(double other) {
 
 // TODO RP: template this
 std::vector<double> Ptxt::decodeDouble() const {
+  AS_LOG_S << "Decoding double " << std::endl;
   std::vector<std::vector<double>> decodings;
   for (const auto& heptxt : value_) {
     decodings.push_back(heptxt->getContext()->decodeDouble(heptxt.get()));
   }
   std::vector<double> vec = layout().reverse_layout_vector(decodings);
-  AS_LOG_S << "Decoded Double. Values: [ ";
+  AS_LOG_S << "Decoded long. Values: [ ";
   if (log()) {
     aluminum_shark::stream_vector(vec);
   }

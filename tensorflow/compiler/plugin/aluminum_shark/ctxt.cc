@@ -20,14 +20,17 @@ Ctxt::Ctxt(std::vector<std::shared_ptr<HECtxt>> hectxt,
 Ctxt Ctxt::deepCopy() const {
   AS_LOG("creating deep copy of: " + name_);
   Ctxt copy = *this;
+  AS_LOG_S << "copyt created" << std::endl;
   // create a copy of the stored object
   std::vector<std::shared_ptr<HECtxt>> hectxt_copy;
   for (auto hectxt : value_) {
+    AS_LOG_S << "copying HECtxt" << std::endl;
     hectxt_copy.push_back(std::shared_ptr<HECtxt>(hectxt->deepCopy()));
   }
   copy.setValue(hectxt_copy);
   // copy layout
   copy.setLayout(std::shared_ptr<Layout>(copy.layout().deepCopy()));
+  AS_LOG_S << "copyt created" << std::endl;
   return copy;
 }
 
@@ -196,6 +199,8 @@ Ctxt& Ctxt::operator*=(double other) {
 // TODO RP: template this
 std::vector<double> Ctxt::decryptDouble() const {
   std::vector<std::vector<double>> decryptions;
+  AS_LOG_S << "trying to decrypt " << value_.size() << " ciphertexts "
+           << std::endl;
   for (const auto& hectxt : value_) {
     decryptions.push_back(getContext()->decryptDouble(hectxt.get()));
   }

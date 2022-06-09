@@ -595,12 +595,14 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleAdd(HloInstruction* add) override {
+    // plain text
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[add],
                         ElementWiseBinaryOp(add, [](ElementwiseT lhs_elem,
                                                     ElementwiseT rhs_elem) {
                           return ElementwiseT(ToArithmeticSafeType(lhs_elem) +
                                               ToArithmeticSafeType(rhs_elem));
                         }));
+    // ctxt
     parent_->unwrapBaseTxt(
         add, ElementWiseBinaryOpCtxt(add, [](::aluminum_shark::BaseTxt& lhs,
                                              ::aluminum_shark::BaseTxt& rhs) {
@@ -785,11 +787,13 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleRsqrt(HloInstruction* rsqrt) override {
+    // plaintext
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[rsqrt],
         ElementWiseUnaryOp(rsqrt, [](ElementwiseT elem_operand) {
           return static_cast<ElementwiseT>(1) / std::sqrt(elem_operand);
         }));
+
     return Status::OK();
   }
 
@@ -1386,8 +1390,6 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
              << " rhs contracting dim " << rhs_contracting_dimension
              << std::endl;
 
-    // throw std::exception();
-
     const ::aluminum_shark::Layout& layout = lhs_btxt.layout();
     ::aluminum_shark::Ctxt result;
     bool done = false;
@@ -1417,7 +1419,7 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     } catch (const std::exception& e) {
       // log exception and rethrow
       AS_LOG_S << e.what() << std::endl;
-      throw e;
+      throw;
     }
 
     // register result with parent
@@ -1574,10 +1576,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
           for (int64_t i = 0; i < result_index.size(); i++) {
             *result_index_locations[i].first = result_index[i];
-            AS_LOG_SA << "first: " << result_index[i] << std::endl;
             if (result_index_locations[i].second) {
               *result_index_locations[i].second = result_index[i];
-              AS_LOG_SA << "second: " << result_index[i] << std::endl;
             }
           }
 
@@ -1608,39 +1608,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
               }
             }
           }
-
-          AS_LOG_S << "Matrix multiplication: " << std::endl;
-          AS_LOG_SA << "\t [";
-          for (const auto& v : result_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] = [";
-          for (const auto& v : lhs_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] x [";
-          for (const auto& v : rhs_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] = " << static_cast<ReturnT>(result_val) << std::endl;
-
           return static_cast<ReturnT>(result_val);
         }));
 
-    ShapeUtil::ForEachSubshape(
-        result.shape(),
-        [&](const Shape& subshape, const ShapeIndex& index) -> void {
-          auto data = result.data<ReturnT>(index);
-          AS_LOG_SA << "[";
-          for (const auto& v : index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "]: [";
-          for (const auto& v : data) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "]" << std::endl;
-        });
+    AS_LOG_S << result.ToString() << std::endl;
     parent_->evaluated_[dot] = std::move(result);
     return Status::OK();
   }
@@ -3138,13 +3109,6 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
 
     TF_RETURN_IF_ERROR(
         result.Populate<ReturnT>([&](absl::Span<const int64_t> multi_index) {
-          std::stringstream ss;
-          ss << "multi_index[";
-          for (const auto& i : multi_index) {
-            ss << i << ", ";
-          }
-          ss << "]";
-          AS_LOG(ss.str());
           return ConvertBinaryFunction(binary_op)(
               lhs_literal.Get<ReturnT>(multi_index),
               rhs_literal.Get<ReturnT>(multi_index));

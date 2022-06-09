@@ -251,8 +251,8 @@ void aluminum_shark_DestroyContext(void* context_ptr) {
 // Layout stuff
 
 const char* const* aluminum_shark_GetAvailabeLayouts(size_t* size) {
-  *size = aluminum_shark::LAYOUT_TYPE_STRINGS.size();
-  return aluminum_shark::LAYOUT_TYPE_STRINGS.data();
+  *size = aluminum_shark::LAYOUT_TYPE_C_STRINGS.size();
+  return aluminum_shark::LAYOUT_TYPE_C_STRINGS.data();
 }
 
 // Ciphertext operations
@@ -300,6 +300,10 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
       static_cast<aluminum_shark_Context*>(context_ptr);
   // read input values
   std::vector<double> ptxt_vec(values, values + size);
+  AS_LOG_S << "input pointer: " << reinterpret_cast<const void*>(values)
+           << std::endl;
+  AS_LOG_S << "vector pointer: " << reinterpret_cast<void*>(ptxt_vec.data())
+           << std::endl;
   AS_LOG_S << "Encrypting Double. Values: ";
   if (aluminum_shark::log()) {
     aluminum_shark::stream_vector(ptxt_vec);
@@ -322,6 +326,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   AS_LOG_S << layout->type() << std::endl;
   std::vector<std::vector<double>> ptxt_with_layout =
       layout->layout_vector(ptxt_vec);
+
   AS_LOG_S << "Input layed out" << std::endl;
   std::vector<std::shared_ptr<aluminum_shark::HECtxt>> hectxts;
   for (auto& v : ptxt_with_layout) {
@@ -334,7 +339,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   // create shared_prt with empty ctxt and then copy the result in
   ret->ctxt = std::make_shared<aluminum_shark::Ctxt>(
       hectxts, std::shared_ptr<aluminum_shark::Layout>(layout), name);
-  AS_LOG_S << "new ctxt: " << reinterpret_cast<void*>(ret) << " wrapped object"
+  AS_LOG_S << "new ctxt: " << reinterpret_cast<void*>(ret) << " wrapped object "
            << ret->ctxt << std::endl;
   return ret;
 }

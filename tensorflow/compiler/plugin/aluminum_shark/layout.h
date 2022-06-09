@@ -2,31 +2,32 @@
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H
 
 #include <exception>
+#include <iostream>
 #include <string>
 #include <vector>
 
-#include "absl/types/span.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
+// removes all the depencies to tensorflow, xla and absl. for testing. disables
+// all of functions
+#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
+#include "absl/types/span.h"
 #include "tensorflow/compiler/xla/service/hlo_instructions.h"
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-
-// enable this for extra debug code to be build in
-#define LAYOUT_DEBUG
+#endif
 
 namespace aluminum_shark {
 
 enum LAYOUT_TYPE { UNSUPPORTED = -1, SIMPLE, BATCH };
 
-extern const std::vector<const char*> LAYOUT_TYPE_STRINGS;
+extern const std::vector<std::string> LAYOUT_TYPE_STRINGS;
+extern const std::vector<const char*> LAYOUT_TYPE_C_STRINGS;
 
-const char* layout_type_to_string(LAYOUT_TYPE lt);
+const std::string& layout_type_to_string(LAYOUT_TYPE lt);
 
 const LAYOUT_TYPE string_to_layout_type(const char* name);
-
-using Shape = std::vector<size_t>;
 
 /* Layout describes how the slots of one or more ciphertexts or
 plaintexts (all of this is true for both plain and ciphertext but for ease
@@ -38,17 +39,18 @@ Internally a message is stored in a contious block of memory with a shape. The
 shape allows of multiindexing just like numpy arrays e.g. x[1,2,3] where the
 list (1,2,3) is translated into a single index into the storage memory block.
 Mapping a message onto one or multiple ciphertexts can change the order of
-elements as they appear in the ciphertext. For example, with batch encoding, the
-message x with the shape (10,10) would be encoded into in 10 ciphertexts where
-the ith ciphertext contains the values x[:,i]. The layout tells us how to create
-the mapping from a message to a ciphertext and vice versa.
+elements as they appear in the ciphertext. For example, with batch encoding,
+the message x with the shape (10,10) would be encoded into in 10 ciphertexts
+where the ith ciphertext contains the values x[:,i]. The layout tells us how
+to create the mapping from a message to a ciphertext and vice versa.
 
-The mapping from message to ciphertext tells us how we need to arange the values
-prior to encoding. It maps from N->N^2. The value at index i in the flat storage
-block of the massage goes into kth sloth of the jth ciphertext according to the
-mapping. Given the storage of the message x and 2D array y, where each row will
-be encoded into single ciphertext, and the mapping function
-std::vector<size_t, size_t> map(size_t i) code would look somehting like this:
+The mapping from message to ciphertext tells us how we need to arange the
+values prior to encoding. It maps from N->N^2. The value at index i in the
+flat storage block of the massage goes into kth sloth of the jth ciphertext
+according to the mapping. Given the storage of the message x and 2D array y,
+where each row will be encoded into single ciphertext, and the mapping
+function std::vector<size_t, size_t> map(size_t i) code would look somehting
+like this:
 
 for (size_t i = 0; i < x.size(); ++i){
   auto idx = map(i);
@@ -80,8 +82,9 @@ class Layout {
 
   virtual ~Layout(){};
 
-  // builds the internal data structures. it needs to be called after the object
-  // has been constructed. using the createLayout function takes care of that.
+  // builds the internal data structures. it needs to be called after the
+  // object has been constructed. using the createLayout function takes care
+  // of that.
   virtual void init() = 0;
 
   virtual LAYOUT_TYPE type() const = 0;
@@ -95,14 +98,17 @@ class Layout {
   template <typename T>
   std::vector<std::vector<T>> layout_vector(const std::vector<T>& vec) const {
     // create return vector
+    AS_LOG_S << "axis_0_ " << axis_0_ << ", axis_1_ " << axis_1_ << std::endl;
     std::vector<std::vector<T>> ret_vec(axis_0_, std::vector<T>(axis_1_, 0));
     // copy values into return vector
-    AS_LOG_S << "laying out vector " << vec.size() << std::endl;
+    AS_LOG_S << "laying out vector with size " << vec.size() << " have "
+             << indicies_.size() << " indicies" << std::endl;
+    AS_LOG_S << "ret_vec.size() = " << ret_vec.size() << std::endl;
     for (size_t i = 0; i < vec.size(); ++i) {
       const auto& idx = indicies_[i];
       AS_LOG_S << "i" << i << " -> " << idx[0] << " ," << idx[1] << std::endl;
-      AS_LOG_S << "ret_vec[" << idx[0] << "]"
-               << " : " << ret_vec[idx[0]].size() << std::endl;
+      AS_LOG_S << "ret_vec[" << idx[0]
+               << "].size() = " << ret_vec[idx[0]].size() << std::endl;
       ret_vec[idx[0]][idx[1]] = vec[i];
     }
     return ret_vec;
@@ -114,8 +120,11 @@ class Layout {
     // create return vector
     std::vector<T> ret_vec(size_);
     // copy values into return vector
+    AS_LOG_S << "reverse layout" << std::endl;
     for (size_t i = 0; i < ret_vec.size(); ++i) {
       const auto& idx = indicies_[i];
+      AS_LOG_S << "ret[" << i << "] = vec[" << idx[0] << "][" << idx[1] << "]"
+               << std::endl;
       ret_vec[i] = vec[idx[0]][idx[1]];
     }
     return ret_vec;
@@ -165,12 +174,14 @@ class Layout {
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const = 0;
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ptxt& two) const = 0;
 
-  // others
+// others
+#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
                          absl::Span<const int64_t> dimensions) const = 0;
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const = 0;
+#endif
 
  protected:
   Shape shape_;
@@ -224,12 +235,14 @@ class SimpleLayout : public Layout {
                                 const Ptxt& two) const override;
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const;
 
-  // others
+// others
+#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
                          absl::Span<const int64_t> dimensions) const override;
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
+#endif
 
  private:
   template <class T, class U>
@@ -287,12 +300,21 @@ class BatchLayout : public Layout {
   virtual Ctxt mat_mult_general(const Ctxt& one,
                                 const Ptxt& two) const override;
 
-  // others
+// others
+#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
   virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
                          absl::Span<const int64_t> dimensions) const override;
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
+#endif
+
+ private:
+  template <class T, class U>
+  Ctxt dot_internal(const Ctxt& one, const T& two) const;
+
+  template <class T, class U>
+  Ctxt mat_mult_internal(const Ctxt& one, const T& two) const;
 };
 
 Layout* createLayout(const char* type, const Shape& shape);
@@ -301,17 +323,16 @@ Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape);
 
 // helper functions
 
-// converts a python sytle index [x,y,z] into single index into the flat sotrage
-// vector
-size_t multi_index_to_flat(const std::vector<size_t>& index,
-                           const Shape& shape);
-
+#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 xla::Shape create_xla_dummy_shape(const Shape& shape);
 
 Shape xla_shape_to_shark_shape(const xla::Shape& shape);
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
+        */
 
-// helper function that computes low level dot products. one and tow should be
-// std::pair that hold the start and end iterator to the vectors
+// helper function that computes low level dot products.
+// one and tow should be std::pair that hold the start and
+// end iterator to the vectors
 template <class T, class U>
 std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
     const std::pair<T, T>& one, const std::pair<U, U>& two) {
@@ -331,31 +352,30 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
   ++iter_two;
   size_t i = 0;
   for (; iter_one != one.second; ++iter_one, ++iter_two, i++) {
-    // need to create a temporary variable so we can free it later
+    // need to create a temporary variable so we can free
+    // it later
     AS_LOG_S << "performing product" << std::endl;
     HECtxt* temp = **iter_one * iter_two->get();
 #ifdef LAYOUT_DEBUG
     AS_LOG_S << "decrypted: " << context->decryptDouble(iter_one->get())[0]
              << " * " << context->decryptDouble(iter_two->get())[0] << " = "
              << context->decryptDouble(temp)[0] << std::endl;
-#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
-        */
-    AS_LOG_S << "performing " << i << "th addition" << std::endl;
-#ifdef LAYOUT_DEBUG
     AS_LOG_S << "decrypted: " << context->decryptDouble(result)[0] << " + "
              << context->decryptDouble(temp)[0] << " = ";
-#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
-        */
+#endif
+    AS_LOG_S << "performing " << i << "th addition" << std::endl;
     result->addInPlace(temp);
 #ifdef LAYOUT_DEBUG
     AS_LOG_SA << context->decryptDouble(result)[0] << std::endl;
-#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
-        */
-    // we have taken ownership of the pointer and are now repsonible for it
+#endif
+    // we have taken ownership of the pointer and are now
+    // repsonible for it
     delete temp;
   }
   return std::vector<std::shared_ptr<HECtxt>>{std::shared_ptr<HECtxt>(result)};
 }
+
+std::ostream& operator<<(std::ostream& os, const Layout& layout);
 
 }  //  namespace aluminum_shark
 
