@@ -149,13 +149,15 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
           AS_LOG_INFO << "Input Literal to Ctxt: " << l.shape().ToString()
                       << " -> " << ctxt.getName() << std::endl;
           arg_ctxts_[i] = ctxt;
-        } else {
-          AS_LOG_S << "Input Literal to Ptxt: " << l.shape().ToString()
-                   << std::endl;
-          arg_ptxts_[i] = convertLiteralToPtxt(l, "arg" + std::to_string(i),
-                                               context, layout_type);
-          // AS" -> " << arg_ptxts_[i].getName() << std::endl;
         }
+        // creating plaintext on demand
+        // else {
+        //   AS_LOG_S << "Input Literal to Ptxt: " << l.shape().ToString()
+        //            << std::endl;
+        //   arg_ptxts_[i] = convertLiteralToPtxt(l, "arg" + std::to_string(i),
+        //                                        context, layout_type);
+        //   // AS" -> " << arg_ptxts_[i].getName() << std::endl;
+        // }
         ++i;
       }
     }
@@ -400,6 +402,7 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // Ctxt stuff
   //
+  // TODO RP: update this
   // We need to keep track of the Ctxts just like the literals above. Once an
   // HloInstruction has been evaluted we store the resulting Ctxt in this map.
   // Ctxt can be quite memory intensive so we don't want to copy them around.
@@ -408,46 +411,48 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // the evaluator goes out of scope. In that case we need have the Ctxt be
   // owned by a nother object with a longer lifetime.
   //
-  // this `GetEvaluatedCtxtFor` can either reutrn a Ctxt or a Ptxt therefore it
-  // returns the base type `BaseTxt`
+  //
 
   // Just like the literals we are tracking Ctxt to HLO mapping
-  ::aluminum_shark::BaseTxt& GetEvaluatedCtxtFor(const HloInstruction* hlo) {
+  // retunrns nullptr if there is no ciphertext
+  ::aluminum_shark::Ctxt* GetEvaluatedCtxtFor(const HloInstruction* hlo) {
     AS_LOG("Getting Ctxt for " + hlo->name());
-    if (hlo->IsConstant()) {
-      auto& literal = hlo->literal();
-      AS_LOG("Converting constant to ctxt, literal: " +
-             literal.ToStringWithLayout() +
-             " Hlo shape: " + hlo->shape().ToString());
-      // get the context that we are working with by taking it from the first
-      // input parameter
-      AS_LOG("Getting Context");
-      const ::aluminum_shark::HEContext* context = arg_ctxts_[0].getContext();
-      const auto type = literal.shape().element_type();
-      AS_LOG_S << "constant: " << std::endl;
-      AS_LOG_SA << "\telement_type: "
-                << ::xla::primitive_util::LowercasePrimitiveTypeName(type)
-                << std::endl;
-      AS_LOG_SA << "\tliteral shape: " << literal.shape().ToString()
-                << std::endl;
-      const std::string& name = hlo->name();
-      // once a proper compiler is inplace we can layout all these plaintext
-      // into the form that they are needed in later. for now we rely on the
-      // forced layout
-      if (computation_handle_->useForcedLayout()) {
-        AS_LOG_S << "using forced layout "
-                 << computation_handle_->getForcedLayout() << std::endl;
-        constant_ptxt_[hlo] =
-            convertLiteralToPtxt(literal, name, context,
-                                 ::aluminum_shark::string_to_layout_type(
-                                     computation_handle_->getForcedLayout()));
-      } else {
-        constant_ptxt_[hlo] = convertLiteralToPtxt(
-            literal, name, context, ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED);
-      }
+    // creating Ptxt on the fly now
+    // if (hlo->IsConstant()) {
+    //   auto& literal = hlo->literal();
+    //   AS_LOG("Converting constant to ctxt, literal: " +
+    //          literal.ToStringWithLayout() +
+    //          " Hlo shape: " + hlo->shape().ToString());
+    //   // get the context that we are working with by taking it from the first
+    //   // input parameter
+    //   AS_LOG("Getting Context");
+    //   const ::aluminum_shark::HEContext* context =
+    //   arg_ctxts_[0].getContext(); const auto type =
+    //   literal.shape().element_type(); AS_LOG_S << "constant: " << std::endl;
+    //   AS_LOG_SA << "\telement_type: "
+    //             << ::xla::primitive_util::LowercasePrimitiveTypeName(type)
+    //             << std::endl;
+    //   AS_LOG_SA << "\tliteral shape: " << literal.shape().ToString()
+    //             << std::endl;
+    //   const std::string& name = hlo->name();
+    //   // once a proper compiler is inplace we can layout all these plaintext
+    //   // into the form that they are needed in later. for now we rely on the
+    //   // forced layout
+    //   if (computation_handle_->useForcedLayout()) {
+    //     AS_LOG_S << "using forced layout "
+    //              << computation_handle_->getForcedLayout() << std::endl;
+    //     constant_ptxt_[hlo] =
+    //         convertLiteralToPtxt(literal, name, context,
+    //                              ::aluminum_shark::string_to_layout_type(
+    //                                  computation_handle_->getForcedLayout()));
+    //   } else {
+    //     constant_ptxt_[hlo] = convertLiteralToPtxt(
+    //         literal, name, context,
+    //         ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED);
+    //   }
 
-      return constant_ptxt_[hlo];
-    }
+    //   return constant_ptxt_[hlo];
+    // }
     if (hlo->opcode() == HloOpcode::kParameter) {
       // check if the parameter is a plaintext or ciphertext
       AS_LOG_S << "Retrieving parameter." << std::endl;
@@ -456,60 +461,75 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       if (it_c != arg_ctxts_.end()) {
         AS_LOG_S << "Found Ctxt: " << it_c->first << " "
                  << it_c->second.getName() << std::endl;
-        return it_c->second;
+        return &it_c->second;
       }
-      auto it_p = arg_ptxts_.find(hlo->parameter_number());
-      if (it_p != arg_ptxts_.end()) {
-        return it_p->second;
-      }
-      AS_LOG_S << "Couldn't find parameter." << std::endl;
+      // creating plaintext on the fly now
+      //   auto it_p = arg_ptxts_.find(hlo->parameter_number());
+      //   if (it_p != arg_ptxts_.end()) {
+      //     return it_p->second;
+      //   }
+      //   AS_LOG_S << "Couldn't find parameter." << std::endl;
     }
     AS_LOG_S << "Searching through maps " << std::endl;
     auto it = evaluated_ctxt_.find(hlo);
-    // it could be that we are actually dealing with a plaintext
+    // plaintext are createad in the fly now
+
+    // if (it == evaluated_ctxt_.end()) {
+    //   AS_LOG_S << "Did not find a ctxt for " << hlo->ToString()
+    //            << " looking for a ptxt" << std::endl;
+    //   auto it_ptxt = constant_ptxt_.find(hlo);
+    //   if (it_ptxt != constant_ptxt_.end()) {
+    //     return &it_ptxt->second;
+    //   }
+    //   AS_LOG_S << "Did not find a ptxt for " << hlo->ToString() << " either"
+    //            << std::endl;
+    //   AS_LOG_S << "Dumping maps: " << std::endl;
+    //   for (auto iter = evaluated_ctxt_.begin(); iter !=
+    //   evaluated_ctxt_.end();
+    //        iter++) {
+    //     AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
+    //   }
+    //   for (auto iter = constant_ptxt_.begin(); iter != constant_ptxt_.end();
+    //        iter++) {
+    //     AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
+    //   }
+    // }
     if (it == evaluated_ctxt_.end()) {
-      AS_LOG_S << "Did not find a ctxt for " << hlo->ToString()
-               << " looking for a ptxt" << std::endl;
-      auto it_ptxt = constant_ptxt_.find(hlo);
-      if (it_ptxt != constant_ptxt_.end()) {
-        return it_ptxt->second;
-      }
-      AS_LOG_S << "Did not find a ptxt for " << hlo->ToString() << " either"
-               << std::endl;
-      AS_LOG_S << "Dumping maps: " << std::endl;
+      AS_LOG_INFO << "could not find evaluated value for: " << hlo->ToString();
+      AS_LOG_INFO << "Dumping maps: " << std::endl;
       for (auto iter = evaluated_ctxt_.begin(); iter != evaluated_ctxt_.end();
            iter++) {
         AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
       }
-      for (auto iter = constant_ptxt_.begin(); iter != constant_ptxt_.end();
-           iter++) {
-        AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
-      }
+      return nullptr;
     }
-    CHECK(it != evaluated_ctxt_.end())
-        << "could not find evaluated value for: " << hlo->ToString();
-    return it->second;
+    return &it->second;
   }
 
   // helper function to assign plaintexts and ciphertexts to correct storage
   // objects
   void unwrapBaseTxt(const HloInstruction* hlo,
                      ::aluminum_shark::BaseTxt& base) {
-    try {
-      evaluated_ctxt_[hlo] = dynamic_cast<::aluminum_shark::Ctxt&>(base);
-    } catch (const std::bad_cast& e) {
-      try {
-        constant_ptxt_[hlo] = dynamic_cast<::aluminum_shark::Ptxt&>(base);
-      } catch (const std::bad_cast& e) {
-        AS_LOG_S << "UnExpected excpetion unwrapping " << base.to_string()
-                 << " : " << e.what() << std::endl;
-      }
-    }
+    // TODO RP: obsolete?
+    AS_LOG_CRITICAL << "calling obsolete function " << std::endl;
+    throw std::exception();
+    // try {
+    //   evaluated_ctxt_[hlo] = dynamic_cast<::aluminum_shark::Ctxt&>(base);
+    // } catch (const std::bad_cast& e) {
+    //   try {
+    //     constant_ptxt_[hlo] = dynamic_cast<::aluminum_shark::Ptxt&>(base);
+    //   } catch (const std::bad_cast& e) {
+    //     AS_LOG_S << "UnExpected excpetion unwrapping " << base.to_string()
+    //              << " : " << e.what() << std::endl;
+    //   }
+    // }
   }
 
   void unwrapBaseTxt(const HloInstruction* hlo,
                      std::shared_ptr<::aluminum_shark::BaseTxt> base) {
-    unwrapBaseTxt(hlo, *base);
+    AS_LOG_CRITICAL << "calling obsolete function " << std::endl;
+    throw std::exception();
+    // unwrapBaseTxt(hlo, *base);
   }
 
   // TODO: think about one structure for both. it would make the lookup and
@@ -521,140 +541,12 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // mapping for ptxt constants
   std::map<const HloInstruction*, ::aluminum_shark::Ptxt> constant_ptxt_;
 
-  // we deal with the input parameters in the same way the plaintexts are dealt
-  // with
+  // we deal with the input parameters in the same way the plaintexts are
+  // dealt with
   std::map<size_t, ::aluminum_shark::Ctxt> arg_ctxts_;
 
   // args can come in two flavors. ptxt and ctxt
   std::map<size_t, ::aluminum_shark::Ptxt> arg_ptxts_;
-
-  // convert literal into Ptxt
-  ::aluminum_shark::Ptxt convertLiteralToPtxt(
-      const Literal& literal, const std::string& name,
-      const ::aluminum_shark::HEContext*& context,
-      ::aluminum_shark::LAYOUT_TYPE layout_type) {
-    ::aluminum_shark::Ptxt ptxt;
-    ShapeUtil::ForEachSubshape(
-        literal.shape(),
-        [&](const Shape& subshape, const ShapeIndex& index) -> void {
-          if (subshape.IsArray()) {
-            AS_LOG_SA << "\tShapeIndex " << index.ToString() << " isArray"
-                      << std::endl;
-
-            // convert to plaintext
-            switch (literal.shape().element_type()) {
-              // int types
-              case ::xla::PrimitiveType::PRED: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::PRED, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::S8: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S8, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::S16: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S16, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::S32: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S32, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::S64: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S64, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::U8: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U8, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::U16: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U16, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::U32: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::U32, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::U64: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::S64, long>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              // float types
-              case ::xla::PrimitiveType::F16: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F16, double>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::F32: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F32, double>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::BF16: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::BF16, double>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              case ::xla::PrimitiveType::F64: {
-                ptxt = convertLiteralToPtxt<::xla::PrimitiveType::F64, double>(
-                    literal, index, name, context, layout_type);
-                break;
-              }
-              // complex types
-              case ::xla::PrimitiveType::C64:
-              case ::xla::PrimitiveType::C128:
-              default:
-                AS_LOG_S << "Error: Unsupported Data Type" << std::endl;
-                break;
-            }
-          } else {
-            AS_LOG_SA << "\tShapeIndex " << index.ToString() << std::endl;
-          }
-        });
-    AS_LOG_S << "Created plaintext " << ptxt.to_string() << std::endl;
-    if (ptxt.is_initialized()) {
-      return ptxt;
-    }
-    AS_LOG_S << ptxt.to_string() << std::endl;
-    throw std::runtime_error("invalid data type");
-  };
-
-  template <xla::PrimitiveType LiteralT, typename PtxtType>
-  ::aluminum_shark::Ptxt convertLiteralToPtxt(
-      const Literal& literal, const ShapeIndex& index, const std::string& name,
-      const ::aluminum_shark::HEContext*& context,
-      ::aluminum_shark::LAYOUT_TYPE layout_type) {
-    auto data = literal.data<
-        typename ::xla::primitive_util::PrimitiveTypeToNative<LiteralT>::type>(
-        index);
-    std::vector<PtxtType> vec(data.begin(), data.end());
-    // AS_LOG_DEBUG << "converted vector: " << vec << std::endl;
-    // layout vector correctly
-    // first we take the shape
-    ::aluminum_shark::Shape shape =
-        ::aluminum_shark::xla_shape_to_shark_shape(literal.shape());
-    ::aluminum_shark::Layout* layout =
-        ::aluminum_shark::createLayout(layout_type, shape);
-    std::vector<std::vector<PtxtType>> layed_out = layout->layout_vector(vec);
-    std::vector<std::shared_ptr<::aluminum_shark::HEPtxt>> ptxts;
-    for (auto& v : layed_out) {
-      ptxts.push_back(
-          std::shared_ptr<::aluminum_shark::HEPtxt>(context->encode(v)));
-    }
-
-    return ::aluminum_shark::Ptxt(
-        ptxts, std::shared_ptr<::aluminum_shark::Layout>(layout), name);
-  };
 
   // Use fast path that uses eigen in the evaluator.
   bool use_fast_path_ = false;
@@ -684,9 +576,9 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   std::unique_ptr<DfsHloVisitor> typed_visitors_[PrimitiveType_ARRAYSIZE];
 
   // Caches pointers to input literals, assuming they are in post-order.
-  // Literals are not owned by this class, and they must outlive the lifetime of
-  // each invocation to the Evaluate* method.
-  // Must be cleared for each evaluation.
+  // Literals are not owned by this class, and they must outlive the lifetime
+  // of each invocation to the Evaluate* method. Must be cleared for each
+  // evaluation.
   std::vector<const Literal*> arg_literals_;
 
   // Max loop iterations to execute with no maximum if negative.

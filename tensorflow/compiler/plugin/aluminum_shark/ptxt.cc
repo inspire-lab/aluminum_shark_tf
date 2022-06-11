@@ -7,11 +7,12 @@ namespace aluminum_shark {
 
 // constructors
 
-Ptxt::Ptxt(std::string name) : name_(name) {}
+Ptxt::Ptxt(const xla::Literal& l, std::string name)
+    : literal_(l), name_(name) {}
 
-Ptxt::Ptxt(std::vector<std::shared_ptr<HEPtxt>> heptxt,
-           std::shared_ptr<Layout> layout, std::string name)
-    : BaseTxt(layout), value_(heptxt), name_(name) {}
+Ptxt::Ptxt(const xla::Literal& l, std::shared_ptr<Layout> layout,
+           std::string name)
+    : BaseTxt(layout), literal_(l), name_(name) {}
 
 // create a deep copy which also creates a copy of stored object
 Ptxt Ptxt::deepCopy() const {
@@ -25,7 +26,6 @@ Ptxt Ptxt::deepCopy() const {
   copy.setValue(heptxt_copy);
   // copy layout
   copy.setLayout(std::shared_ptr<Layout>(copy.layout().deepCopy()));
-  return copy;
   return copy;
 }
 
@@ -50,47 +50,85 @@ void Ptxt::setValue(std::vector<std::shared_ptr<HEPtxt>>& value_ptrs) {
 // BaseTxt interface
 
 std::string Ptxt::to_string() const {
-  if (is_initialized()) {
-    return "Plaintext is not initialized.";
-  }
+  // if (is_initialized()) {
+  //   return "Plaintext is not initialized.";
+  // }
   // TODO: get more info
   return name_;
 }
 
-void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
-  AS_LOG_S << "updating layout for " << name_ << " from " << *layout_ << " to "
-           << *layout << std::endl;
-  AS_LOG_S << "number of values in the plaintext: " << value_.size()
-           << std::endl;
-  const HEContext* context = value_[0]->getContext();
-  AS_LOG_S << "got context: " << context->to_string() << " @"
-           << reinterpret_cast<const void*>(context) << std::endl;
+void Ptxt::updateLayout(LAYOUT_TYPE layout_type, const HEContext* context) {
+  std::shared_ptr<Layout> layout(
+      createLayout(layout_type, xla_shape_to_shark_shape(literal_.shape())));
+  updateLayout(layout, context);
+}
+
+void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
+                        const HEContext* context) {
+  updateLayout(layout);
+  value_.clear();
   if (context->scheme() == HE_SCHEME::CKKS) {
-    AS_LOG_S << "CKKS layout update " << std::endl;
-    std::vector<std::vector<double>> ptxt_with_layout =
-        layout->layout_vector(decodeDouble());
-    value_.clear();
-    for (const auto& ptxt : ptxt_with_layout) {
-      std::shared_ptr<HEPtxt> ptxt_ptr(
-          std::shared_ptr<HEPtxt>(context->encode(ptxt)));
-      value_.push_back(ptxt_ptr);
+    std::vector<double> vec = convertLiteralToPtxt<double>(literal_);
+    auto vec_with_layout(layout->layout_vector(vec));
+    for (const auto& v : vec_with_layout) {
+      // TODO RP: maybe move here
+      value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
     }
   } else if (context->scheme() == HE_SCHEME::BFV) {
-    std::vector<std::vector<long>> ptxt_with_layout =
-        layout->layout_vector(decodeLong());
-    value_.clear();
-    for (const auto& ptxt : ptxt_with_layout) {
-      std::shared_ptr<HEPtxt> ptxt_ptr(
-          std::shared_ptr<HEPtxt>(context->encode(ptxt)));
-      value_.push_back(ptxt_ptr);
+    std::vector<long> vec = convertLiteralToPtxt<long>(literal_);
+    layout->layout_vector(vec);
+    auto vec_with_layout(layout->layout_vector(vec));
+    for (const auto& v : vec_with_layout) {
+      // TODO RP: maybe move here
+      value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
     }
   } else {
-    AS_LOG_S << "unsopported scheme encountered in updating plaintext layout: "
-             << context->scheme() << std::endl;
-    throw std::runtime_error(
-        "unsopported scheme encountered in updating plaintext layout");
+    AS_LOG_CRITICAL << "unexpected scheme type" << std::endl;
+    throw std::runtime_error("unexpected scheme type");
+  }
+}
+
+void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
+  if (layout_) {
+    AS_LOG_INFO << "updating layout for " << name_ << " from " << *layout_
+                << " to " << *layout << std::endl;
+  } else {
+    AS_LOG_INFO << "updating layout for " << name_ << " to " << *layout
+                << std::endl;
   }
   layout_ = layout;
+  // AS_LOG_S << "number of values in the plaintext: " << value_.size()
+  //          << std::endl;
+  // const HEContext* context = value_[0]->getContext();
+  // AS_LOG_S << "got context: " << context->to_string() << " @"
+  //          << reinterpret_cast<const void*>(context) << std::endl;
+  // if (context->scheme() == HE_SCHEME::CKKS) {
+  //   AS_LOG_S << "CKKS layout update " << std::endl;
+  //   std::vector<std::vector<double>> ptxt_with_layout =
+  //       layout->layout_vector(decodeDouble());
+  //   value_.clear();
+  //   for (const auto& ptxt : ptxt_with_layout) {
+  //     std::shared_ptr<HEPtxt> ptxt_ptr(
+  //         std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+  //     value_.push_back(ptxt_ptr);
+  //   }
+  // } else if (context->scheme() == HE_SCHEME::BFV) {
+  //   std::vector<std::vector<long>> ptxt_with_layout =
+  //       layout->layout_vector(decodeLong());
+  //   value_.clear();
+  //   for (const auto& ptxt : ptxt_with_layout) {
+  //     std::shared_ptr<HEPtxt> ptxt_ptr(
+  //         std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+  //     value_.push_back(ptxt_ptr);
+  //   }
+  // } else {
+  //   AS_LOG_S << "unsopported scheme encountered in updating plaintext layout:
+  //   "
+  //            << context->scheme() << std::endl;
+  //   throw std::runtime_error(
+  //       "unsopported scheme encountered in updating plaintext layout");
+  // }
+  // layout_ = layout;
 }
 
 std::shared_ptr<BaseTxt> Ptxt::operator+(const BaseTxt& other) const {

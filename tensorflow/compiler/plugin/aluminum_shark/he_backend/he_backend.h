@@ -98,6 +98,10 @@ class HEContext {
   virtual HEPtxt* encode(const std::vector<long>& plain) const = 0;
   virtual HEPtxt* encode(const std::vector<double>& plain) const = 0;
 
+  // creates plaintext objects that need to be encoded on demand
+  virtual HEPtxt* createPtxt(const std::vector<long>& vec) const = 0;
+  virtual HEPtxt* createPtxt(const std::vector<double>& vec) const = 0;
+
   // decoding
   virtual std::vector<long> decodeLong(HEPtxt*) const = 0;
   virtual std::vector<double> decodeDouble(HEPtxt*) const = 0;

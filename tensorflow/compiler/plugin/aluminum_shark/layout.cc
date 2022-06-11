@@ -84,22 +84,19 @@ Layout::Layout(const Shape& shape) : shape_(shape) {
     size *= i;
   }
   size_ = size;
-  indicies_.reserve(size_);
   AS_LOG_S << "nubmer of indices " << size_ << std::endl;
 }
 
 // Simple Layout
 
 void SimpleLayout::init() {
-  for (size_t i = 0; i < size_; ++i) {
-    indicies_.push_back(std::vector<size_t>{i, 0});
-  }
   axis_0_ = size_;
   axis_1_ = 1;
   AS_LOG_INFO << "Created layout indices " << indicies_.size() << std::endl;
-  if (log(AS_DEBUG)) {
-    AS_LOG_DEBUG << indicies_ << std::endl;
-  }
+}
+
+std::pair<size_t, size_t> SimpleLayout::get_layout_index(size_t i) const {
+  return std::pair<size_t, size_t>(i, 0);
 }
 
 LAYOUT_TYPE SimpleLayout::type() const { return LAYOUT_TYPE::SIMPLE; }
@@ -132,10 +129,12 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
-  // TODO: make sure they are in the same layout. if not we need to layout two
-  // on the fly
+  // we can create a copy here that costs basically nothing two does not contain
+  // data (or at least shouldnt)
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
+  const auto& two_v = copy.getValue();
   auto& one_v = one.getValue();
-  const auto& two_v = two.getValue();
   try {
     AS_LOG_S << "simple layout add in place, value sizes: " << one_v.size()
              << " and " << two_v.size() << std::endl;
@@ -162,12 +161,16 @@ void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
 void SimpleLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
   // TODO: make sure they are in the same layout. if not we need to layout two
   // on the fly
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
+  const auto& two_v = copy.getValue();
   for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two.getValue()[i].get());
+    one.getValue()[i]->multInPlace(two_v[i].get());
   }
 }
 
 void SimpleLayout::add_in_place(Ptxt& one, const Ptxt& two) const {
+  AS_LOG_WARNING << "deprecated function will be removed" << std::endl;
   for (size_t i = 0; i < size_; ++i) {
     one.getValue()[i]->addInPlace(two.getValue()[i].get());
   }
@@ -233,7 +236,9 @@ Ctxt SimpleLayout::dot(const Ctxt& one, const Ctxt& two) const {
   return dot_internal<Ctxt, HECtxt>(one, two);
 }
 Ctxt SimpleLayout::dot(const Ctxt& one, const Ptxt& two) const {
-  return dot_internal<Ptxt, HEPtxt>(one, two);
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
+  return dot_internal<Ptxt, HEPtxt>(one, copy);
 }
 
 // Matrix multplication
@@ -241,7 +246,9 @@ Ctxt SimpleLayout::mat_mult(const Ctxt& one, const Ctxt& two) const {
   return mat_mult_internal<Ctxt, HECtxt>(one, two);
 }
 Ctxt SimpleLayout::mat_mult(const Ctxt& one, const Ptxt& two) const {
-  return mat_mult_internal<Ptxt, HEPtxt>(one, two);
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
+  return mat_mult_internal<Ptxt, HEPtxt>(one, copy);
 }
 // More general matrix multplication for hihger dimensional matrices
 // see: https://www.tensorflow.org/xla/operation_semantics#dotgeneral, and
@@ -399,7 +406,7 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
 template <class T, class U>
 Ctxt SimpleLayout::mat_mult_general_internal(const Ctxt& one,
                                              const T& two) const {
-  AS_LOG_S << "mat_mutl_general not implemented yet" << std::endl;
+  AS_LOG_CRITICAL << "mat_mutl_general not implemented yet" << std::endl;
   throw std::exception();
 }
 
@@ -407,63 +414,69 @@ Ctxt SimpleLayout::mat_mult_general_internal(const Ctxt& one,
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
                              absl::Span<const int64_t> dimensions) const {
-  AS_LOG_S << "broadcasting from shape: ";
-  if (log()) {
-    stream_vector(ptxt.shape());
-  }
-  AS_LOG_SA << " to shape ";
-  if (log()) {
-    stream_vector(result_shape);
-  }
-  AS_LOG_SA << "; dimensions : { ";
-  for (const auto i : dimensions) {
-    AS_LOG_SA << i << ", ";
-  }
-  AS_LOG_SA << " }" << std::endl;
+  AS_LOG_CRITICAL << "broadcasting should be handled by tensorflow"
+                  << std::endl;
+  throw std::runtime_error("broadcasting needs to be done by tensorflow");
+  // AS_LOG_S << "broadcasting from shape: ";
+  // if (log()) {
+  //   stream_vector(ptxt.shape());
+  // }
+  // AS_LOG_SA << " to shape ";
+  // if (log()) {
+  //   stream_vector(result_shape);
+  // }
+  // AS_LOG_SA << "; dimensions : { ";
+  // for (const auto i : dimensions) {
+  //   AS_LOG_SA << i << ", ";
+  // }
+  // AS_LOG_SA << " }" << std::endl;
 
-  // create reusult objecst
-  std::shared_ptr<Layout> result_layout(
-      createLayout(LAYOUT_TYPE::SIMPLE, result_shape));
-  const std::vector<std::shared_ptr<HEPtxt>> ptxt_v = ptxt.getValue();
-  std::vector<std::shared_ptr<HEPtxt>> result_ptxts(result_layout->size());
-  // we'll iterate over this
-  AS_LOG_S << "broadcasting " << std::endl;
-  auto broadcast_dim = dimensions[0];
+  // // create reusult objecst
+  // std::shared_ptr<Layout> result_layout(
+  //     createLayout(LAYOUT_TYPE::SIMPLE, result_shape));
+  // const std::vector<std::shared_ptr<HEPtxt>> ptxt_v = ptxt.getValue();
+  // std::vector<std::shared_ptr<HEPtxt>> result_ptxts(result_layout->size());
+  // // we'll iterate over this
+  // AS_LOG_S << "broadcasting " << std::endl;
+  // auto broadcast_dim = dimensions[0];
 
-  // this is pretty much a copy of xla::Literl::Broadcast. just made some
-  // modificitons that fit our purposes
+  // // this is pretty much a copy of xla::Literl::Broadcast. just made some
+  // // modificitons that fit our purposes
 
-  // first we need to make some conversion
-  // TODO RP: converting the shapes back and forth between xla shapes and
-  // aluminum_shark shapes should be addressed at some point
-  xla::Shape xla_shape = create_xla_dummy_shape(ptxt.shape());
-  xla::Shape xla_result_shape = create_xla_dummy_shape(result_shape);
+  // // first we need to make some conversion
+  // // TODO RP: converting the shapes back and forth between xla shapes and
+  // // aluminum_shark shapes should be addressed at some point
+  // xla::Shape xla_shape = create_xla_dummy_shape(ptxt.shape());
+  // xla::Shape xla_result_shape = create_xla_dummy_shape(result_shape);
 
-  // scratch_source_index is temporary storage space for the computed index
-  // into the input literal.  We put it here to avoid allocating an
-  // std::vector in every iteration of ShapeUtil::ForEachIndex.
-  std::vector<int64_t> scratch_source_index(xla_shape.dimensions_size());
+  // // scratch_source_index is temporary storage space for the computed index
+  // // into the input literal.  We put it here to avoid allocating an
+  // // std::vector in every iteration of ShapeUtil::ForEachIndex.
+  // std::vector<int64_t> scratch_source_index(xla_shape.dimensions_size());
 
-  xla::ShapeUtil::ForEachIndex(
-      xla_result_shape, [&](absl::Span<const int64_t> output_index) {
-        for (int64_t i = 0, end = dimensions.size(); i < end; ++i) {
-          scratch_source_index[i] = output_index[dimensions[i]];
-        }
-        int64_t dest_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
-            xla_result_shape, output_index);
-        int64_t source_index =
-            xla::IndexUtil::MultidimensionalIndexToLinearIndex(
-                xla_shape, scratch_source_index);
-        // memcpy(dest_data + primitive_size * dest_index,
-        //        source_data + primitive_size * source_index, primitive_size);
-        // this where the acutall broadcasting happens
-        AS_LOG_DEBUG << "copying from " << source_index << " to " << dest_index
-                     << std::endl;
-        result_ptxts[dest_index] = ptxt_v[source_index];
-        return true;
-      });
+  // xla::ShapeUtil::ForEachIndex(
+  //     xla_result_shape, [&](absl::Span<const int64_t> output_index) {
+  //       for (int64_t i = 0, end = dimensions.size(); i < end; ++i) {
+  //         scratch_source_index[i] = output_index[dimensions[i]];
+  //       }
+  //       int64_t dest_index =
+  //       xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+  //           xla_result_shape, output_index);
+  //       int64_t source_index =
+  //           xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+  //               xla_shape, scratch_source_index);
+  //       // memcpy(dest_data + primitive_size * dest_index,
+  //       //        source_data + primitive_size * source_index,
+  //       primitive_size);
+  //       // this where the acutall broadcasting happens
+  //       AS_LOG_DEBUG << "copying from " << source_index << " to " <<
+  //       dest_index
+  //                    << std::endl;
+  //       result_ptxts[dest_index] = ptxt_v[source_index];
+  //       return true;
+  //     });
 
-  return Ptxt(result_ptxts, result_layout, ptxt.getName() + " broadcast");
+  // return Ptxt(result_ptxts, result_layout, ptxt.getName() + " broadcast");
 }
 
 Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
@@ -498,7 +511,9 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   xla::DimensionVector rhs_dim_multipliers = MakeDimMultipliers(rhs_shape);
 
   auto& lhs_v = lhs.getValue();
-  auto& rhs_v = rhs.getValue();
+  Ptxt copy = rhs;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, lhs.getContext());
+  auto& rhs_v = copy.getValue();
 
   const int64_t feature_group_count = hlo->feature_group_count();
   const int64_t batch_group_count = hlo->batch_group_count();
@@ -696,14 +711,14 @@ void BatchLayout::init() {
   AS_LOG_SA << " size_: " << size_ << ", batch size: " << bs;
   size_t step_size = size_ / bs;
   AS_LOG_SA << ", step_size size: " << step_size << std::endl;
-  for (size_t i = 0; i < size_; ++i) {
-    // put every batch dimension into a single ciphertext
-    indicies_.push_back(std::vector<size_t>{i % step_size, i / step_size});
-  }
 
   axis_0_ = step_size;
   axis_1_ = bs;
   AS_LOG_S << "axis_0 " << axis_0_ << ", axis_1 " << axis_1_ << std::endl;
+}
+
+std::pair<size_t, size_t> BatchLayout::get_layout_index(size_t i) const {
+  return std::pair<size_t, size_t>(i % axis_0_, i / axis_0_);
 }
 
 LAYOUT_TYPE BatchLayout::type() const { return LAYOUT_TYPE::BATCH; }
@@ -749,32 +764,28 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
-  // TODO: make sure they are in the same layout. if not we need to layout two
-  // on the fly
-  if (one.layout().type() != two.layout().type()) {
-    Ptxt copy = two.deepCopy();
-    Layout* layout = createLayout(LAYOUT_TYPE::BATCH, copy.layout().shape());
-    copy.updateLayout(std::shared_ptr<Layout>(layout));
-    return add_in_place(one, copy);
-  }
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
+  const auto& two_v = copy.getValue();
   auto& one_v = one.getValue();
-  const auto& two_v = two.getValue();
+
   if (one_v.size() != two_v.size()) {
-    AS_LOG_S << "incompatbile shapes: " << one.shape() << " and " << two.shape()
-             << ". lhs contains " << one_v.size() << " values and rhs contains "
-             << two_v.size() << "values" << std::endl;
+    AS_LOG_CRITICAL << "incompatbile shapes: " << one.shape() << " and "
+                    << two.shape() << ". lhs contains " << one_v.size()
+                    << " values and rhs contains " << two_v.size() << "values"
+                    << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
   for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->addInPlace(two.getValue()[i].get());
+    one.getValue()[i]->addInPlace(copy.getValue()[i].get());
   }
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
-  // TODO: make sure they are in the same layout. if not we need to layout two
-  // on the fly
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
+  const auto& two_v = copy.getValue();
   auto& one_v = one.getValue();
-  const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
     AS_LOG_S << "incompatbile shapes: ";
     stream_vector(one.shape());
@@ -784,11 +795,13 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
     throw std::runtime_error("incompatbile shapes");
   }
   for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->multInPlace(two.getValue()[i].get());
+    one.getValue()[i]->multInPlace(copy.getValue()[i].get());
   }
 }
 
 void BatchLayout::add_in_place(Ptxt& one, const Ptxt& two) const {
+  AS_LOG_CRITICAL << "deprecated function " << std::endl;
+  throw std::runtime_error("deprecated function");
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
@@ -803,6 +816,8 @@ void BatchLayout::add_in_place(Ptxt& one, const Ptxt& two) const {
 }
 
 void BatchLayout::multiply_in_place(Ptxt& one, const Ptxt& two) const {
+  AS_LOG_CRITICAL << "deprecated function " << std::endl;
+  throw std::runtime_error("deprecated function");
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
@@ -874,12 +889,19 @@ Ctxt BatchLayout::dot(const Ctxt& lhs, const Ctxt& rhs) const {
 }
 
 Ctxt BatchLayout::dot(const Ctxt& lhs, const Ptxt& rhs) const {
-  AS_LOG_S << "dot: lhs \n"
-           << PrintWithShape<double>(lhs.decryptDouble(), lhs.shape())
-           << "rhs: \n"
-           << PrintWithShape<double>(rhs.decodeDouble(), rhs.shape())
-           << std::endl;
-  return dot_internal<Ptxt, HEPtxt>(lhs, rhs);
+  Ptxt copy = rhs;
+  copy.updateLayout(LAYOUT_TYPE::BATCH, lhs.getContext());
+  const auto& two_v = copy.getValue();
+  AS_LOG_INFO << "dot: lhs " << lhs.shape() << "rhs: " << copy.shape()
+              << std::endl;
+#ifdef LAYOUT_DEBUG
+  AS_LOG_INFO << "dot: lhs \n"
+              << PrintWithShape<double>(lhs.decryptDouble(), lhs.shape())
+              << "rhs: \n"
+              << PrintWithShape<double>(copy.decodeDouble(), copy.shape())
+              << std::endl;
+#endif
+  return dot_internal<Ptxt, HEPtxt>(lhs, copy);
 }
 
 template <class T, class U>
@@ -1139,11 +1161,8 @@ Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ctxt& two) const {
 }
 Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ptxt& two) const {
   // creating a non const copy and update the layout
-  Ptxt copy = two.deepCopy();
-  AS_LOG_S << "updating Layout " << std::endl;
-  copy.updateLayout(
-      std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE, two.shape())));
-  AS_LOG_S << "Layout updated. performing matrix multiplication " << std::endl;
+  Ptxt copy = two;
+  copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
   return mat_mult_internal<Ptxt, HEPtxt>(one, copy);
 }
 // More general matrix multplication for hihger dimensional matrices
@@ -1162,47 +1181,51 @@ Ctxt BatchLayout::mat_mult_general(const Ctxt& one, const Ptxt& two) const {
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 Ptxt BatchLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
                             absl::Span<const int64_t> dimensions) const {
-  AS_LOG_S << "brodcasting with batch layout, from " << ShapePrint(ptxt.shape())
-           << " to " << ShapePrint(result_shape) << ", dimensions: "
-           << std::vector<int64_t>(dimensions.begin(), dimensions.end())
-           << std::endl;
-  // there is a special case where brodacast an array along the batch
-  // dimension. this is free since with the batchlayout this is what we
-  // already have. just update the layout to reflect the internal shape
-  if (result_shape.size() == ptxt.shape().size() + 1) {
-    bool broadcast_batch = true;
-    const auto& ptxt_shape = ptxt.shape();
-    for (size_t i = 0; i < ptxt_shape.size() && broadcast_batch; i++) {
-      broadcast_batch = result_shape[i + 1] == ptxt_shape[i];
-    }
-    if (broadcast_batch) {
-      AS_LOG_S << "using fast broadcast along the batch dimension" << std::endl;
-      std::shared_ptr<Layout> new_layout = std::shared_ptr<Layout>(
-          createLayout(LAYOUT_TYPE::BATCH, result_shape));
-      Ptxt ret(ptxt.getValue(), new_layout, "broadcast " + ptxt.getName());
-      AS_LOG_S << "broadcasted: \n"
-               << ptxt.decodeDouble() << "to \n"
-               << ret.decodeDouble() << std::endl;
-      return ret;
-    }
-  }
+  AS_LOG_CRITICAL << "do broadcasting on ptxt" << std::endl;
+  throw std::runtime_error("do broadcasting on ptxt");
+
+  // AS_LOG_S << "brodcasting with batch layout, from " <<
+  // ShapePrint(ptxt.shape())
+  //          << " to " << ShapePrint(result_shape) << ", dimensions: "
+  //          << std::vector<int64_t>(dimensions.begin(), dimensions.end())
+  //          << std::endl;
+  // // there is a special case where brodacast an array along the batch
+  // // dimension. this is free since with the batchlayout this is what we
+  // // already have. just update the layout to reflect the internal shape
+  // if (result_shape.size() == ptxt.shape().size() + 1) {
+  //   bool broadcast_batch = true;
+  //   const auto& ptxt_shape = ptxt.shape();
+  //   for (size_t i = 0; i < ptxt_shape.size() && broadcast_batch; i++) {
+  //     broadcast_batch = result_shape[i + 1] == ptxt_shape[i];
+  //   }
+  //   if (broadcast_batch) {
+  //     AS_LOG_S << "using fast broadcast along the batch dimension" <<
+  //     std::endl; std::shared_ptr<Layout> new_layout =
+  //     std::shared_ptr<Layout>(
+  //         createLayout(LAYOUT_TYPE::BATCH, result_shape));
+  //     Ptxt ret(ptxt.getValue(), new_layout, "broadcast " + ptxt.getName());
+  //     AS_LOG_S << "broadcasted: \n"
+  //              << ptxt.decodeDouble() << "to \n"
+  //              << ret.decodeDouble() << std::endl;
+  //     return ret;
+  //   }
+  // }
 
   // creating a non const copy and update the layout
-  Ptxt copy = ptxt.deepCopy();
-  AS_LOG_S << "updating Layout " << std::endl;
-  copy.updateLayout(
-      std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE, ptxt.shape())));
-  return copy.layout().broadcast(copy, result_shape, dimensions);
+  // Ptxt copy = ptxt.deepCopy();
+  // AS_LOG_S << "updating Layout " << std::endl;
+  // copy.updateLayout(
+  //     std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE,
+  //     ptxt.shape())));
+  // return copy.layout().broadcast(copy, result_shape, dimensions);
 }
 
 Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                               xla::HloInstruction* hlo) const {
-  Ptxt rhs_copy = rhs.deepCopy();
-  AS_LOG_S << "updating Layout " << std::endl;
-  rhs_copy.updateLayout(
-      std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE, rhs.shape())));
-  AS_LOG_S << "Layout updated. performing convolution multiplication "
-           << std::endl;
+  Ptxt rhs_copy = rhs;
+  AS_LOG_INFO << "updating Layout " << std::endl;
+  rhs_copy.updateLayout(LAYOUT_TYPE::SIMPLE, lhs.getContext());
+  AS_LOG_INFO << "Layout updated. performing convolution " << std::endl;
   // this is an adapted copy of
   // xla::HloEvaluatorTypedVisitor::ConvolutionWithLiterals
   const auto& window = hlo->window();
@@ -1412,12 +1435,15 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
        &func](const absl::Span<const int64_t> multi_index) {
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             result_shape, multi_index);
-        AS_LOG_S << "running "
-                 << std::vector<int64_t>(multi_index.begin(), multi_index.end())
-                 << " / "
-                 << std::vector<int64_t>(result_shape.dimensions().begin(),
-                                         result_shape.dimensions().end())
-                 << std::endl;
+        if (linear_index % 1000 == 0) {
+          AS_LOG_INFO << "running "
+                      << std::vector<int64_t>(multi_index.begin(),
+                                              multi_index.end())
+                      << " / "
+                      << std::vector<int64_t>(result_shape.dimensions().begin(),
+                                              result_shape.dimensions().end())
+                      << std::endl;
+        }
         ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
       });
 

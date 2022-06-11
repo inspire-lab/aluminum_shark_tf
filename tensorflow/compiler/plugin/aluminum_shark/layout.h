@@ -91,9 +91,12 @@ class Layout {
 
   virtual Layout* deepCopy() const = 0;
 
-  const std::vector<size_t>& map(size_t i) { return indicies_[i]; };
+  // const std::vector<size_t>& map(size_t i) { return indicies_[i]; };
   const Shape& shape() const { return shape_; };
   const size_t size() const { return size_; };
+
+  virtual std::pair<size_t, size_t> get_layout_index(size_t i) const = 0;
+  // virtual size_t get_reverse_index(size_t i, size_t j) const = 0;
 
   template <typename T>
   std::vector<std::vector<T>> layout_vector(const std::vector<T>& vec) const {
@@ -105,12 +108,13 @@ class Layout {
              << indicies_.size() << " indicies" << std::endl;
     AS_LOG_DEBUG << "ret_vec.size() = " << ret_vec.size() << std::endl;
     for (size_t i = 0; i < vec.size(); ++i) {
-      const auto& idx = indicies_[i];
-      AS_LOG_DEBUG << "i" << i << " -> " << idx[0] << " ," << idx[1]
-                   << std::endl;
-      AS_LOG_DEBUG << "ret_vec[" << idx[0]
-                   << "].size() = " << ret_vec[idx[0]].size() << std::endl;
-      ret_vec[idx[0]][idx[1]] = vec[i];
+      const auto idx = get_layout_index(i);
+      const size_t idx_0 = idx.first;
+      const size_t idx_1 = idx.second;
+      AS_LOG_DEBUG << "i" << i << " -> " << idx_0 << " ," << idx_1 << std::endl;
+      AS_LOG_DEBUG << "ret_vec[" << idx_0
+                   << "].size() = " << ret_vec[idx_0].size() << std::endl;
+      ret_vec[idx_0][idx_1] = vec[i];
     }
     return ret_vec;
   };
@@ -123,12 +127,14 @@ class Layout {
     // copy values into return vector
     AS_LOG_S << "reverse layout" << std::endl;
     for (size_t i = 0; i < ret_vec.size(); ++i) {
-      const auto& idx = indicies_[i];
+      const auto idx = get_layout_index(i);
+      const size_t idx_0 = idx.first;
+      const size_t idx_1 = idx.second;
       if (log(AS_DEBUG)) {
-        AS_LOG_DEBUG << "ret[" << i << "] = vec[" << idx[0] << "][" << idx[1]
+        AS_LOG_DEBUG << "ret[" << i << "] = vec[" << idx_0 << "][" << idx_1
                      << "]" << std::endl;
       }
-      ret_vec[i] = vec[idx[0]][idx[1]];
+      ret_vec[i] = vec[idx_0][idx_1];
     }
     return ret_vec;
   };
@@ -198,6 +204,9 @@ class SimpleLayout : public Layout {
  public:
   SimpleLayout(const Shape& shape) : Layout(shape){};
   virtual void init() override;
+
+  virtual std::pair<size_t, size_t> get_layout_index(size_t i) const;
+
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
 
@@ -262,6 +271,8 @@ class BatchLayout : public Layout {
  public:
   BatchLayout(const Shape& shape) : Layout(shape){};
   virtual void init() override;
+
+  virtual std::pair<size_t, size_t> get_layout_index(size_t i) const;
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
 
@@ -330,8 +341,7 @@ Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape);
 xla::Shape create_xla_dummy_shape(const Shape& shape);
 
 Shape xla_shape_to_shark_shape(const xla::Shape& shape);
-#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
-        */
+#endif
 
 // helper function that computes low level dot products.
 // one and tow should be std::pair that hold the start and
