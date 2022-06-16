@@ -66,10 +66,16 @@ void Ptxt::updateLayout(LAYOUT_TYPE layout_type, const HEContext* context) {
 void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
                         const HEContext* context) {
   updateLayout(layout);
+  AS_LOG_INFO << "Clearing ciphertexts "  << std::endl;
   value_.clear();
+  AS_LOG_INFO << "Checking scheme type "  << std::endl;
+  AS_LOG_INFO << "scheme type is "  << context->scheme() << std::endl;
   if (context->scheme() == HE_SCHEME::CKKS) {
+    AS_LOG_INFO << "CKKS layout "  << std::endl;
     std::vector<double> vec = convertLiteralToPtxt<double>(literal_);
+    AS_LOG_INFO << "Converted literal to Ptxt " << vec.size() << " items" << std::endl;
     auto vec_with_layout(layout->layout_vector(vec));
+    AS_LOG_INFO << "layed out vector" <<std::endl;
     for (const auto& v : vec_with_layout) {
       // TODO RP: maybe move here
       value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
@@ -97,6 +103,7 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
                 << std::endl;
   }
   layout_ = layout;
+  AS_LOG_INFO << "layout updated" << std::endl;
   // AS_LOG_S << "number of values in the plaintext: " << value_.size()
   //          << std::endl;
   // const HEContext* context = value_[0]->getContext();

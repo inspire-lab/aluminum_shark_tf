@@ -1309,6 +1309,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     TF_RETURN_IF_ERROR(result.PopulateParallel<ReturnT>(func));
     parent_->evaluated_[conv] = std::move(result);
 
+    AS_LOG_DEBUG << "Conv plaintext result " << parent_->evaluated_[conv].ToString();
+
     ::aluminum_shark::Ctxt* ctxt =
         parent_->GetEvaluatedCtxtFor(conv->operand(0));
     if (ctxt) {
@@ -3126,17 +3128,21 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
     ::aluminum_shark::Ctxt* rhs_ctxt = parent_->GetEvaluatedCtxtFor(rhs);
     if (!lhs_ctxt && !rhs_ctxt) {
+      AS_LOG_INFO << "no ctxt involved in instruction " << instruction->name()
+                                                  << " returing nullptr"
+                                                  << std::endl;
       return std::shared_ptr<::aluminum_shark::Ctxt>();
     }
 
-    AS_LOG("ElementWiseBinaryOp " + instruction->name() +
-           "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
-           " Ctxt 2: " + rhs_ctxt->to_string());
 
     if (rhs_ctxt) {
+      AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+            "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
+            " Ctxt 2: " + rhs_ctxt->to_string());
       return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
           binary_op(*lhs_ctxt, *rhs_ctxt));
     }
+    AS_LOG_INFO << instruction->name() << " ctxt and plaintext" << std::endl;
     ::aluminum_shark::Ptxt ptxt(rhs_literal, instruction->operand(1)->name());
     return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
         binary_op(*lhs_ctxt, ptxt));

@@ -68,7 +68,8 @@ std::string Ctxt::to_string() const {
 }
 
 void Ctxt::updateLayout(std::shared_ptr<Layout> layout) {
-  // TODO:
+  setLayout(layout);
+  AS_LOG_INFO << "layout set to " << *layout_ << std::endl;
 }
 
 std::shared_ptr<BaseTxt> Ctxt::operator+(const BaseTxt& other) const {

@@ -558,8 +558,11 @@ Status AluminumSharkHloEvaluator::HandleReshape(HloInstruction* reshape) {
   // TODO: eventually this needs to be proper reshaping
   ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(reshape->operand(0));
   if (ctxt) {
-    AS_LOG_INFO << "faking reashpe of  " << reshape->operand(0)->name()
+    AS_LOG_INFO << "reashpe of  " << reshape->operand(0)->name()
                 << std::endl;
+    const auto& old_layout = ctxt->layoutPointer();
+    old_layout->reshape(*ctxt,::aluminum_shark::xla_shape_to_shark_shape(reshape->shape()));          
+    AS_LOG_INFO << "reashped " << reshape->operand(0)->name() << std::endl;
     evaluated_ctxt_[reshape] = *ctxt;
   }
 
@@ -572,6 +575,14 @@ Status AluminumSharkHloEvaluator::HandleTranspose(HloInstruction* transpose) {
   // TODO: eventually this needs to be proper transposing
   ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(transpose->operand(0));
   if (ctxt) {
+    AS_LOG_INFO << "transposing "  << transpose->operand(0)->name() << " with shape " 
+                << ctxt->shape() << " and permutation [";
+    if(::aluminum_shark::log(::aluminum_shark::AS_INFO)){
+      for(auto i : transpose->dimensions()){
+        AS_LOG_SA << i  << ", ";
+      }
+    AS_LOG_SA << std::endl;
+    }
     evaluated_ctxt_[transpose] = *ctxt;
   }
   return Status::OK();
@@ -2028,13 +2039,14 @@ Status AluminumSharkHloEvaluator::HandleCopy(HloInstruction* copy) {
   TF_RET_CHECK(ShapeUtil::Compatible(copy->shape(), copy->operand(0)->shape()));
   evaluated_[copy] = GetEvaluatedLiteralFor(copy->operand(0)).Clone();
 
-  // cipher- and plaintext copy
+  // cipher- copy
   AS_LOG_INFO << "looking to copy ctxt from " << copy->operand(0)->name()
               << std::endl;
   ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(copy->operand(0));
   if (ctxt) {
     AS_LOG_INFO << "copied ctxt from " << copy->operand(0)->name() << std::endl;
-    evaluated_ctxt_[copy] = ctxt->deepCopy();
+    // TODO RP: create a copy if we need on
+    evaluated_ctxt_[copy] = *ctxt;
   }
 
   return Status::OK();

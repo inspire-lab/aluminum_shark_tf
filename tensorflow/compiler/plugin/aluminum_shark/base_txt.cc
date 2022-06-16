@@ -9,6 +9,10 @@ const Shape& BaseTxt::shape() const { return layout_->shape(); }
 
 const Layout& BaseTxt::layout() const { return *layout_; }
 
-void BaseTxt::setLayout(std::shared_ptr<Layout> layout) { layout_ = layout; }
+void BaseTxt::setLayout(std::shared_ptr<Layout> layout) {
+   AS_LOG_INFO << "setting layout" << std::endl;
+   layout_ = layout; 
+   AS_LOG_INFO << "layout set" << std::endl;
+}
 
 }  // namespace aluminum_shark
