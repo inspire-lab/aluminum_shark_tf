@@ -18,7 +18,7 @@
 #include "tensorflow/compiler/xla/shape_util.h"
 #endif
 
-#define LAYOUT_DEBUG
+// #define LAYOUT_DEBUG
 
 namespace aluminum_shark {
 
@@ -262,7 +262,6 @@ class SimpleLayout : public Layout {
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const override;
 
-
  private:
   template <class T, class U>
   Ctxt dot_internal(const Ctxt& one, const T& two) const;
@@ -330,8 +329,7 @@ class BatchLayout : public Layout {
                            xla::HloInstruction* hlo) const override;
 #endif
 
-
-virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const ;
+  virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const;
 
  private:
   template <class T, class U>
@@ -352,8 +350,6 @@ xla::Shape create_xla_dummy_shape(const Shape& shape);
 
 Shape xla_shape_to_shark_shape(const xla::Shape& shape);
 #endif
-
-
 
 // helper function that computes low level dot products.
 // one and tow should be std::pair that hold the start and

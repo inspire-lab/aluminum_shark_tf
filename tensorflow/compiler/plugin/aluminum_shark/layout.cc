@@ -21,7 +21,7 @@ namespace {
 bool warning_layout_debug_logged = [] {
   std::cout << " ### WARNING!!! ###\n"
             << "Layout has been built with extra debug options. Parallel "
-            <<   "processing is disabled" << std::endl;
+            << "processing is disabled" << std::endl;
   return true;
 }();
 #endif
@@ -486,15 +486,14 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   AS_LOG_S << "decypting input" << std::endl;
   try {
     auto lhs_dec = lhs.decryptDouble();
-    AS_LOG_S << "decrypted: \n "
-              << PrintWithShape<double>(lhs_dec, lhs.shape()) << std::endl;
+    AS_LOG_S << "decrypted: \n " << PrintWithShape<double>(lhs_dec, lhs.shape())
+             << std::endl;
   } catch (const std::exception& e) {
     AS_LOG_S << "something messed up" << std::endl;
     AS_LOG_S << e.what() << '\n';
   }
 #endif
-  
-  
+
   // this is an adapted copy of
   // xla::HloEvaluatorTypedVisitor::ConvolutionWithLiterals
   const auto& window = hlo->window();
@@ -697,8 +696,8 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   AS_LOG_S << "decrypting result" << std::endl;
   try {
     auto lhs_dec = lhs.decryptDouble();
-    AS_LOG_S << "decrypted: \n "
-              << PrintWithShape<double>(lhs_dec, lhs.shape()) << std::endl;
+    AS_LOG_S << "decrypted: \n " << PrintWithShape<double>(lhs_dec, lhs.shape())
+             << std::endl;
   } catch (const std::exception& e) {
     AS_LOG_S << "something messed up" << std::endl;
     AS_LOG_S << e.what() << '\n';
@@ -709,9 +708,10 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
 }
 #endif
 
-Ctxt SimpleLayout::reshape(Ctxt& lhs, const Shape& shape) const{
+Ctxt SimpleLayout::reshape(Ctxt& lhs, const Shape& shape) const {
   std::shared_ptr<Layout> layout(createLayout(LAYOUT_TYPE::SIMPLE, shape));
-  AS_LOG_INFO << "reshaping from " << lhs.layout() << " to "  << *layout << std::endl;
+  AS_LOG_INFO << "reshaping from " << lhs.layout() << " to " << *layout
+              << std::endl;
   lhs.updateLayout(layout);
 
   return lhs;
@@ -1011,7 +1011,8 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   // shape checks
   // this only works for iif we have 2 dimensionals matrices and the number of
   // clumones in one is equal to the number of rows in two
-  AS_LOG_INFO << "shapes for mat mult: " <<  one.shape() << ", " <<  two.shape() <<std::endl;
+  AS_LOG_INFO << "shapes for mat mult: " << one.shape() << ", " << two.shape()
+              << std::endl;
   if (one.shape().size() != 2 || two.shape().size() != 2 ||
       one.shape()[1] != two.shape()[0]) {
     AS_LOG_S << "invalid shapes for mat mult " << std::endl;
@@ -1481,18 +1482,20 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
 }
 #endif
 
-Ctxt BatchLayout::reshape(Ctxt& lhs, const Shape& shape) const{
-  if(lhs.shape()[0] !=  shape[0]){
-    AS_LOG_ERROR << "can't reshape batch dimension. not implemented yet" << std::endl;
-    throw std::runtime_error("can't reshape batch dimension. not implemented yet");
+Ctxt BatchLayout::reshape(Ctxt& lhs, const Shape& shape) const {
+  if (lhs.shape()[0] != shape[0]) {
+    AS_LOG_ERROR << "can't reshape batch dimension. not implemented yet"
+                 << std::endl;
+    throw std::runtime_error(
+        "can't reshape batch dimension. not implemented yet");
   }
   std::shared_ptr<Layout> layout(createLayout(LAYOUT_TYPE::BATCH, shape));
-  // AS_LOG_INFO << "reshaping from " << lhs.layout() << " to "  << *layout << std::endl;
+  // AS_LOG_INFO << "reshaping from " << lhs.layout() << " to "  << *layout <<
+  // std::endl;
   lhs.updateLayout(layout);
   AS_LOG_INFO << "reshaped to " << lhs.shape() << std::endl;
   return lhs;
 };
-
 
 // template instantiation
 template Ctxt BatchLayout::dot_internal<Ctxt, HECtxt>(const Ctxt& one,
