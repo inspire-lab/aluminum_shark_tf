@@ -66,17 +66,20 @@ void Ptxt::updateLayout(LAYOUT_TYPE layout_type, const HEContext* context) {
 void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
                         const HEContext* context) {
   updateLayout(layout);
-  AS_LOG_INFO << "Clearing ciphertexts "  << std::endl;
+  AS_LOG_INFO << "Clearing ciphertexts " << std::endl;
   value_.clear();
-  AS_LOG_INFO << "Checking scheme type "  << std::endl;
-  AS_LOG_INFO << "scheme type is "  << context->scheme() << std::endl;
+  AS_LOG_INFO << "Checking scheme type " << std::endl;
+  AS_LOG_INFO << "scheme type is " << context->scheme() << std::endl;
   if (context->scheme() == HE_SCHEME::CKKS) {
-    AS_LOG_INFO << "CKKS layout "  << std::endl;
+    AS_LOG_INFO << "CKKS layout " << std::endl;
     std::vector<double> vec = convertLiteralToPtxt<double>(literal_);
-    AS_LOG_INFO << "Converted literal to Ptxt " << vec.size() << " items" << std::endl;
+    AS_LOG_INFO << "Converted literal to Ptxt " << vec.size() << " items"
+                << std::endl;
+    AS_LOG_DEBUG << vec << std::endl;
     auto vec_with_layout(layout->layout_vector(vec));
-    AS_LOG_INFO << "layed out vector" <<std::endl;
+    AS_LOG_INFO << "layed out vector" << std::endl;
     for (const auto& v : vec_with_layout) {
+      AS_LOG_DEBUG << v << std::endl;
       // TODO RP: maybe move here
       value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
     }
@@ -262,6 +265,11 @@ std::vector<double> Ptxt::decodeDouble() const {
   std::vector<std::vector<double>> decodings;
   for (const auto& heptxt : value_) {
     decodings.push_back(heptxt->getContext()->decodeDouble(heptxt.get()));
+  }
+  if (layout_) {
+    AS_LOG_DEBUG << "layout is " << layout() << std::endl;
+  } else {
+    AS_LOG_DEBUG << "no layout " << std::endl;
   }
   std::vector<double> vec = layout().reverse_layout_vector(decodings);
   if (log(AS_DEBUG)) {
