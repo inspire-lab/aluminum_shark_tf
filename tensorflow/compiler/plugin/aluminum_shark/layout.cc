@@ -792,8 +792,6 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
   AS_LOG_S << "batch layout multiply in place, value sizes: " << one_v.size()
            << " and " << two_v.size() << std::endl;
   for (size_t i = 0; i < one_v.size(); ++i) {
-    // AS_LOG_S << "ctxt one: " << one_v[i]->to_string() << std::endl;
-    // AS_LOG_S << "ctxt two: " << two_v[i]->to_string() << std::endl;
     one_v[i]->multInPlace(two_v[i].get());
   }
   AS_LOG_S << "multiplying done " << std::endl;
@@ -1050,8 +1048,8 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
       // iterate over the colmuns of lhs and rows of lhs
       lhs_index[1] = i;
       rhs_index[0] = i;
-      AS_LOG_S << lhs_index << " * " << rhs_index << std::endl;
-      AS_LOG_S << "lhs_v.size() = " << lhs_v.size()
+      AS_LOG_DEBUG << lhs_index << " * " << rhs_index << std::endl;
+      AS_LOG_DEBUG << "lhs_v.size() = " << lhs_v.size()
                << " index: " << multi_index_to_flat(lhs_index, lhs_shape)
                << " , rhs_v.size() = " << rhs_v.size()
                << "index: " << multi_index_to_flat(rhs_index, rhs_shape)
