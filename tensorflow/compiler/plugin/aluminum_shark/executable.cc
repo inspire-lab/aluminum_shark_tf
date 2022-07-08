@@ -72,9 +72,6 @@ StatusOr<Literal> AluminumSharkExecutable::Evaluate(
   auto ret = evaluator_->Evaluate(computation, arg_literals);
   if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
     AS_LOG_DEBUG << "computation result:" << ret.ValueOrDie() << std::endl;
-  } else if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
-    AS_LOG_INFO << "computation result:" << ret.ValueOrDie().ToStringOneline()
-                << std::endl;
   }
 
   return ret;

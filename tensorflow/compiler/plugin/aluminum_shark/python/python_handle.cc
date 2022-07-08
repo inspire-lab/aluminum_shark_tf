@@ -297,7 +297,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
                                    const char* name, const size_t* shape,
                                    int shape_size, const char* layout_type,
                                    void* context_ptr) {
-  AS_LOG_S << "Encrypting Double. Context: " << context_ptr << std::endl;
+  AS_LOG_INFO << "Encrypting Double. Context: " << context_ptr << std::endl;
   aluminum_shark_Context* context =
       static_cast<aluminum_shark_Context*>(context_ptr);
   // read input values
