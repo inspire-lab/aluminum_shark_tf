@@ -188,8 +188,8 @@ class HECtxt {
   // ctxt and plain
 
   // addition
-  virtual HECtxt* operator+(const HEPtxt* other) = 0;
-  virtual HECtxt* addInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator+(HEPtxt* other) = 0;
+  virtual HECtxt* addInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator+(long other) = 0;
   virtual HECtxt* addInPlace(long other) = 0;
   virtual HECtxt* operator+(double other) = 0;
@@ -204,8 +204,8 @@ class HECtxt {
   virtual HECtxt* subInPlace(double other) = 0;
 
   // multiplication
-  virtual HECtxt* operator*(const HEPtxt* other) = 0;
-  virtual HECtxt* multInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator*(HEPtxt* other) = 0;
+  virtual HECtxt* multInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator*(long other) = 0;
   virtual HECtxt* multInPlace(long other) = 0;
   virtual HECtxt* operator*(double other) = 0;
