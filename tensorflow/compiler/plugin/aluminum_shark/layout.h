@@ -3,11 +3,13 @@
 
 #include <exception>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/parallel.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 // removes all the depencies to tensorflow, xla and absl. for testing. disables
 // all of functions
@@ -103,21 +105,31 @@ class Layout {
   template <typename T>
   std::vector<std::vector<T>> layout_vector(const std::vector<T>& vec) const {
     // create return vector
-    AS_LOG_S << "axis_0_ " << axis_0_ << ", axis_1_ " << axis_1_ << std::endl;
+    AS_LOG_INFO << "axis_0_ " << axis_0_ << ", axis_1_ " << axis_1_
+                << std::endl;
     std::vector<std::vector<T>> ret_vec(axis_0_, std::vector<T>(axis_1_, 0));
     // copy values into return vector
-    AS_LOG_S << "laying out vector with size " << vec.size() << " have "
-             << indicies_.size() << " indicies" << std::endl;
+    AS_LOG_INFO << "laying out vector with size " << vec.size() << " have "
+                << indicies_.size() << " indicies" << std::endl;
     AS_LOG_DEBUG << "ret_vec.size() = " << ret_vec.size() << std::endl;
-    for (size_t i = 0; i < vec.size(); ++i) {
+    // create layout function
+    std::mutex mu;
+    auto func = [this, &ret_vec, &vec, &mu](size_t i) {
       const auto idx = get_layout_index(i);
       const size_t idx_0 = idx.first;
       const size_t idx_1 = idx.second;
-      AS_LOG_DEBUG << "i" << i << " -> " << idx_0 << " ," << idx_1 << std::endl;
-      AS_LOG_DEBUG << "ret_vec[" << idx_0
-                   << "].size() = " << ret_vec[idx_0].size() << std::endl;
+      // only lock if we actually need it
+      if (log(AS_DEBUG)) {
+        std::unique_lock<std::mutex>(mu);
+        AS_LOG_DEBUG << "i" << i << " -> " << idx_0 << " ," << idx_1
+                     << std::endl;
+        AS_LOG_DEBUG << "ret_vec[" << idx_0
+                     << "].size() = " << ret_vec[idx_0].size() << std::endl;
+      }
       ret_vec[idx_0][idx_1] = vec[i];
-    }
+    };
+
+    run_parallel(0, vec.size(), func);
     return ret_vec;
   };
 

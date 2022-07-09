@@ -17,6 +17,13 @@ cc_library(
 )
 
 cc_library(
+    name = "parallel",
+    srcs = ["parallel.cc"],
+    hdrs = ["parallel.h"],
+    deps = ["//tensorflow/compiler/plugin/aluminum_shark:logging"],
+)
+
+cc_library(
     name = "exception",
     hdrs = ["exception.h"],
 )
