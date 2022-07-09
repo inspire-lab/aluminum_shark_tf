@@ -578,7 +578,7 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                   ToArithmeticSafeType(rhs_elem));
             }));
     ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
-        add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+        multiply, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
           lhs *= rhs;
           return &lhs;
         });
