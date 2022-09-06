@@ -578,7 +578,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                   ToArithmeticSafeType(rhs_elem));
             }));
     ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
-        multiply, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+        multiply,
+        [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
           lhs *= rhs;
           return &lhs;
         });
@@ -3149,6 +3150,11 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     }
 
     if (rhs_ctxt) {
+      if (!lhs_ctxt) {
+        ::aluminum_shark::Ptxt ptxt(lhs_literal,
+                                    instruction->operand(0)->name());
+        return binary_op(*rhs_ctxt, ptxt);
+      }
       AS_LOG("ElementWiseBinaryOp " + instruction->name() +
              "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
              " Ctxt 2: " + rhs_ctxt->to_string());

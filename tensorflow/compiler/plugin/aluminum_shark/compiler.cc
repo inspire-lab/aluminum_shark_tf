@@ -9,6 +9,7 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/hlo_evaluator.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/xla/service/algebraic_simplifier.h"
+#include "tensorflow/compiler/xla/service/batchnorm_expander.h"
 #include "tensorflow/compiler/xla/service/cholesky_expander.h"
 #include "tensorflow/compiler/xla/service/comparison_expander.h"
 #include "tensorflow/compiler/xla/service/computation_placer.h"
@@ -77,6 +78,10 @@ Status AluminumSharkCompiler::RunHloOptimization(HloModule* hlo_module) {
   pipeline.AddPass<EighExpander>();
   pipeline.AddPass<ComparisonExpander>();
   pipeline.AddPass<TriangularSolveExpander>();
+  pipeline.AddPass<BatchNormExpander>(
+      /*rewrite_training_op=*/false,
+      /*rewrite_inference_op=*/true,
+      /*rewrite_grad_op=*/false);
   pipeline.AddPass<LayoutAssignment>(
       hlo_module->mutable_entry_computation_layout());
 
