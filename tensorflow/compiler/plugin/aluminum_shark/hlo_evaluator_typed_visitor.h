@@ -577,16 +577,26 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
               return ElementwiseT(ToArithmeticSafeType(lhs_elem) *
                                   ToArithmeticSafeType(rhs_elem));
             }));
-    ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
-        multiply,
-        [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
-          lhs *= rhs;
-          return &lhs;
-        });
 
-    if (ctxt_ptr) {
-      parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
+    if (parent_->inplace(multiply)) {
+      ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
+          multiply,
+          [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            lhs *= rhs;
+            return &lhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
+      }
+    } else {
+      auto ctxt_ptr = ElementWiseBinaryOpCtxt(
+          multiply, [](::aluminum_shark::Ctxt& lhs,
+                       ::aluminum_shark::BaseTxt& rhs) { return lhs * rhs; });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
+      }
     }
+
     return Status::OK();
   }
 
@@ -609,15 +619,26 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                           return ElementwiseT(ToArithmeticSafeType(lhs_elem) +
                                               ToArithmeticSafeType(rhs_elem));
                         }));
-    ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
-        add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
-          lhs += rhs;
-          return &lhs;
-        });
 
-    if (ctxt_ptr) {
-      parent_->evaluated_ctxt_[add] = *ctxt_ptr;
+    if (parent_->inplace(add)) {
+      ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
+          add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            lhs += rhs;
+            return &lhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[add] = *ctxt_ptr;
+      }
+    } else {
+      auto ctxt_ptr = ElementWiseBinaryOpCtxt(
+          add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            return lhs + rhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[add] = *ctxt_ptr;
+      }
     }
+
     return Status::OK();
   }
 

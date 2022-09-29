@@ -558,10 +558,10 @@ Status AluminumSharkHloEvaluator::HandleReshape(HloInstruction* reshape) {
   // TODO: eventually this needs to be proper reshaping
   ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(reshape->operand(0));
   if (ctxt) {
-    AS_LOG_INFO << "reashpe of  " << reshape->operand(0)->name()
-                << std::endl;
+    AS_LOG_INFO << "reashpe of  " << reshape->operand(0)->name() << std::endl;
     const auto& old_layout = ctxt->layoutPointer();
-    old_layout->reshape(*ctxt,::aluminum_shark::xla_shape_to_shark_shape(reshape->shape()));          
+    old_layout->reshape(
+        *ctxt, ::aluminum_shark::xla_shape_to_shark_shape(reshape->shape()));
     AS_LOG_INFO << "reashped " << reshape->operand(0)->name() << std::endl;
     evaluated_ctxt_[reshape] = *ctxt;
   }
@@ -575,13 +575,13 @@ Status AluminumSharkHloEvaluator::HandleTranspose(HloInstruction* transpose) {
   // TODO: eventually this needs to be proper transposing
   ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(transpose->operand(0));
   if (ctxt) {
-    AS_LOG_INFO << "transposing "  << transpose->operand(0)->name() << " with shape " 
-                << ctxt->shape() << " and permutation [";
-    if(::aluminum_shark::log(::aluminum_shark::AS_INFO)){
-      for(auto i : transpose->dimensions()){
-        AS_LOG_SA << i  << ", ";
+    AS_LOG_INFO << "transposing " << transpose->operand(0)->name()
+                << " with shape " << ctxt->shape() << " and permutation [";
+    if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
+      for (auto i : transpose->dimensions()) {
+        AS_LOG_SA << i << ", ";
       }
-    AS_LOG_SA << std::endl;
+      AS_LOG_SA << std::endl;
     }
     evaluated_ctxt_[transpose] = *ctxt;
   }
@@ -2798,6 +2798,15 @@ std::unique_ptr<Array2D<int32>> AluminumSharkHloEvaluator::MatmulArray2D(
     const Array2D<int32>& lhs, const Array2D<int32>& rhs) {
   return MatmulArray2DImpl<int32>(
       lhs, rhs, __xla_cpu_runtime_EigenSingleThreadedMatMulS32);
+}
+
+void AluminumSharkHloEvaluator::set_inplace_ops(
+    std::unordered_set<const HloInstruction*> ops) {
+  inplace_ops = ops;
+}
+
+bool AluminumSharkHloEvaluator::inplace(const HloInstruction* hlo) {
+  return inplace_ops.find(hlo) != inplace_ops.end();
 }
 
 }  // namespace aluminum_shark

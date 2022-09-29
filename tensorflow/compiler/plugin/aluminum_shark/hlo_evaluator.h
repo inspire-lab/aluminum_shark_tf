@@ -248,16 +248,18 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   static std::unique_ptr<Array2D<int32>> MatmulArray2D(
       const Array2D<int32>& lhs, const Array2D<int32>& rhs);
 
+  void set_inplace_ops(std::unordered_set<const HloInstruction*> ops);
+
  protected:
-  // Make AluminumSharkHloEvaluatorTypedVisitor a friend because it is logically
-  // part of this class.
+  // Make AluminumSharkHloEvaluatorTypedVisitor a friend because it is
+  // logically part of this class.
   //
   // A straightforward implementation would be to make it a nested class
   // declared and defined in hlo_evaluator.cc.  Instead
-  // AluminumSharkHloEvaluatorTypedVisitor lives as a separate class with its
-  // own header because its template gets instantiated many times and we want to
-  // use extern templates to shard out the compilation of those instantiations
-  // across multiple cc files.
+  // AluminumSharkHloEvaluatorTypedVisitor lives as a separate class with
+  // its own header because its template gets instantiated many times and we
+  // want to use extern templates to shard out the compilation of those
+  // instantiations across multiple cc files.
   template <typename ReturnT, typename ElementwiseT>
   friend class AluminumSharkHloEvaluatorTypedVisitor;
 
@@ -553,6 +555,12 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // the compuation handle that holds the callbacks
   std::shared_ptr<::aluminum_shark::ComputationHandle> computation_handle_;
+
+  // a list of operations that can be performed inplace
+  std::unordered_set<const HloInstruction*> inplace_ops;
+
+  // check if the given hlo can be performed inplace
+  bool inplace(const HloInstruction* hlo);
 
  private:
   template <typename ReturnT, typename NativeT>

@@ -111,6 +111,12 @@ StatusOr<std::unique_ptr<Executable>> AluminumSharkCompiler::RunBackend(
       hlo_module->config().debug_options().xla_hlo_evaluator_use_fast_path());
   evaluator->set_custom_call_handler(HandleEvaluatorCustomCall);
 
+  // find inplace ops
+  evaluator->set_inplace_ops(FindInplaceOps(hlo_module.get()));
+
+  // precomupte all ops with known inputs
+  Precompute(hlo_module.get(), evaluator.get());
+
   // Create executable from only the Hlo module.
   std::unique_ptr<Executable> executable =
       absl::make_unique<AluminumSharkExecutable>(
@@ -141,6 +147,7 @@ AluminumSharkCompiler::Compile(
   auto hlo_modules = module_group->ConsumeModules();
   TF_ASSIGN_OR_RETURN(auto module, RunHloPasses(std::move(hlo_modules[0]),
                                                 stream_exec[0][0], options));
+
   TF_ASSIGN_OR_RETURN(auto executable, RunBackend(std::move(module),
                                                   stream_exec[0][0], options));
 
@@ -164,6 +171,174 @@ se::Platform::Id AluminumSharkCompiler::PlatformId() const {
 HloCostAnalysis::ShapeSizeFunction
 AluminumSharkCompiler::ShapeSizeBytesFunction() const {
   return AluminumSharkExecutable::ShapeSizeBytes;
+}
+
+std::unordered_set<const HloInstruction*> AluminumSharkCompiler::FindInplaceOps(
+    HloModule* module) {
+  AS_LOG_DEBUG << "finding inplace operations" << std::endl;
+  // check for operations that can be done inplace
+  HloInstruction* root = module->entry_computation()->root_instruction();
+
+  // set of candidate ops
+  std::unordered_set<const HloInstruction*> inplace_ops;
+  // count the uses of HLOs
+  std::map<const HloInstruction*, int> op_use_count;
+  // iterate over all nodes
+  std::unordered_set<const HloInstruction*> nodes;
+  nodes.insert(root);
+  std::unordered_set<const HloInstruction*> visited;
+  while (nodes.size() != 0) {
+    // get first node from the set of unvisted nodes and remove
+    auto node_iter = nodes.begin();
+    const HloInstruction* node = *node_iter;
+    nodes.erase(node_iter);
+
+    // collect a set of all operands
+    auto n_operands = node->operand_count();
+    std::unordered_set<const HloInstruction*> operand_set;
+    for (size_t i = 0; i < n_operands; ++i) {
+      operand_set.insert(node->operand(i));
+    }
+
+    // go over the unqiue operands and increase the use counter and add them to
+    // the set to visit if did not visit them already
+    for (auto n : operand_set) {
+      // increase counter
+      auto iter = op_use_count.find(n);
+      if (iter == op_use_count.end()) {
+        op_use_count[n] = 1;
+      } else {
+        iter->second += 1;
+      }
+      // check if we visited it already
+      auto iter_v = visited.find(n);
+      if (iter_v == visited.end()) {
+        nodes.insert(n);
+      }
+    }
+
+    // check if the node is a candidate op
+    HloOpcode opcode = node->opcode();
+    if (opcode == HloOpcode::kAdd          //
+        || opcode == HloOpcode::kMultiply  //
+        || opcode == HloOpcode::kSubtract  //
+        || opcode == HloOpcode::kDivide    //
+    ) {
+      inplace_ops.insert(node);
+    }
+
+    // add current node to the list of visited notes
+    visited.insert(node);
+  }
+
+  // logging
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    AS_LOG_DEBUG << "possible inplace ops: " << std::endl;
+    for (const auto node : inplace_ops) {
+      AS_LOG_SA << "\t" << node->name() << std::endl;
+    }
+    AS_LOG_DEBUG << "op use counts: " << std::endl;
+    for (auto iter : op_use_count) {
+      AS_LOG_SA << "\t" << iter.first->name() << ": " << iter.second
+                << std::endl;
+    }
+  }
+
+  // remove ops from the set are used more than once
+  for (auto it = inplace_ops.begin(); it != inplace_ops.end();) {
+    if (op_use_count[*it] != 1)
+      it = inplace_ops.erase(it);
+    else
+      ++it;
+  }
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    AS_LOG_DEBUG << "inplace ops:" << std::endl;
+    for (const auto node : inplace_ops) {
+      AS_LOG_SA << "\t" << node->name() << std::endl;
+    }
+  }
+  return inplace_ops;
+}
+
+void AluminumSharkCompiler::Precompute(HloModule* module,
+                                       AluminumSharkHloEvaluator* evaluator) {
+  // generate print options
+  HloPrintOptions print_options =
+      HloPrintOptions()
+          .set_print_subcomputation_mode(
+              HloPrintOptions::PrintSubcomputationMode::kNonSequentialBodies)
+          .set_print_metadata(false)
+          // .set_print_backend_config(false)
+          // .set_print_infeed_outfeed_config(false)
+          // .set_print_only_essential_constants(true)
+          .set_compact_operands(true)
+          .set_print_operand_names(true)
+          .set_print_operand_shape(true)
+          // .set_print_operand_index_annotation_interval(0)
+          // .set_print_program_shape(false)
+          // .set_print_percent(false)
+          // .set_print_control_dependencies(false)
+          // .set_canonicalize_instruction_names(true)
+          .set_print_ids(true)
+          .set_indent_amount(2)
+      // .set_canonicalize_computations(true)
+      ;
+
+  AS_LOG_DEBUG << "Running precomputation on: " << std::endl;
+  AS_LOG_DEBUG << module->ToString(print_options) << std::endl;
+  // get computation
+  HloComputation* computation = module->entry_computation();
+
+  // list of replacements
+  std::vector<std::pair<HloInstruction*, std::unique_ptr<HloInstruction>>>
+      replacements;
+
+  do {
+    // clear any leftovers
+    replacements.clear();
+    // get all instrunctions
+    std::vector<HloInstruction*> instructions =
+        computation->MakeInstructionPostOrder();
+
+    // iterate over all instructions and evalute them if possible
+    for (HloInstruction* hlo : instructions) {
+      // if we have a constant or parameter. continue
+      if (hlo->opcode() == HloOpcode::kParameter ||
+          hlo->opcode() == HloOpcode::kConstant) {
+        continue;
+      }
+
+      // check if all operands are constant
+      for (HloInstruction* op : hlo->operands()) {
+        if (op->opcode() != HloOpcode::kConstant) {
+          // break out of this loop and contiue the outer for loop
+          goto instruction_loop;
+        }
+      }
+
+      // at this point we have an hlo that isn't a constant or parameter and has
+      // only constant operands
+      {
+        // evaluate the hlo
+        auto literal = evaluator->Evaluate(hlo).ConsumeValueOrDie();
+        // create new constant hlo
+        std::unique_ptr<HloInstruction> new_hlo =
+            HloInstruction::CreateConstant(std::move(literal));
+        // add it to the replacement list
+        replacements.push_back(std::make_pair<>(hlo, std::move(new_hlo)));
+      }
+
+    instruction_loop:;  // to break the inner loop
+    }
+    // perform replacements
+    for (auto& replacement : replacements) {
+      computation->ReplaceWithNewInstruction(replacement.first,
+                                             std::move(replacement.second));
+    }
+
+  } while (replacements.size() != 0);
+  AS_LOG_DEBUG << "After precomputation: " << std::endl;
+  AS_LOG_DEBUG << module->ToString(print_options) << std::endl;
 }
 
 static bool InitModule() {
