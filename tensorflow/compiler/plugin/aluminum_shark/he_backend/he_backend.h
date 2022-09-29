@@ -5,17 +5,17 @@
 #include <string>
 #include <vector>
 
-#define ALUMINUM_SHARK_API_VERSION "0.1.0"
+#define ALUMINUM_SHARK_API_VERSION "0.2.0"
 #define ALUMINUM_SHARK_API_VERSION_MAJOR 0
-#define ALUMINUM_SHARK_API_VERSION_MINOR 1
+#define ALUMINUM_SHARK_API_VERSION_MINOR 2
 #define ALUMINUM_SHARK_API_VERSION_PATCH 0
 
 namespace aluminum_shark {
 
 struct API_VERSION {
-  const uint8_t major = ALUMINUM_SHARK_API_VERSION_MAJOR;
-  const uint8_t minor = ALUMINUM_SHARK_API_VERSION_MINOR;
-  const uint8_t patch = ALUMINUM_SHARK_API_VERSION_PATCH;
+  const size_t major = ALUMINUM_SHARK_API_VERSION_MAJOR;
+  const size_t minor = ALUMINUM_SHARK_API_VERSION_MINOR;
+  const size_t patch = ALUMINUM_SHARK_API_VERSION_PATCH;
 };
 
 enum HE_SCHEME { BFV = 0, CKKS, TFHE };
@@ -98,9 +98,15 @@ class HEContext {
   virtual HEPtxt* encode(const std::vector<long>& plain) const = 0;
   virtual HEPtxt* encode(const std::vector<double>& plain) const = 0;
 
+  // creates plaintext objects that need to be encoded on demand
+  virtual HEPtxt* createPtxt(const std::vector<long>& vec) const = 0;
+  virtual HEPtxt* createPtxt(const std::vector<double>& vec) const = 0;
+
   // decoding
   virtual std::vector<long> decodeLong(HEPtxt*) const = 0;
   virtual std::vector<double> decodeDouble(HEPtxt*) const = 0;
+
+  virtual HE_SCHEME scheme() const = 0;
 
  private:
   friend HEBackend;
@@ -182,8 +188,8 @@ class HECtxt {
   // ctxt and plain
 
   // addition
-  virtual HECtxt* operator+(const HEPtxt* other) = 0;
-  virtual HECtxt* addInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator+(HEPtxt* other) = 0;
+  virtual HECtxt* addInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator+(long other) = 0;
   virtual HECtxt* addInPlace(long other) = 0;
   virtual HECtxt* operator+(double other) = 0;
@@ -198,21 +204,20 @@ class HECtxt {
   virtual HECtxt* subInPlace(double other) = 0;
 
   // multiplication
-  virtual HECtxt* operator*(const HEPtxt* other) = 0;
-  virtual HECtxt* multInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator*(HEPtxt* other) = 0;
+  virtual HECtxt* multInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator*(long other) = 0;
   virtual HECtxt* multInPlace(long other) = 0;
   virtual HECtxt* operator*(double other) = 0;
   virtual HECtxt* multInPlace(double other) = 0;
 
-  //Rotate
+  // Rotate
   virtual HECtxt* rotate(int steps) = 0;
   virtual HECtxt* rotInPlace(int steps) = 0;
 
  private:
   friend HEContext;
 };
-
 
 std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path);
 

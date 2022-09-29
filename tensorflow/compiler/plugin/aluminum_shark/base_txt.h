@@ -40,6 +40,9 @@ class BaseTxt {
 
   const Shape& shape() const;
   const Layout& layout() const;
+  const std::shared_ptr<Layout> layoutPointer() const{
+    return layout_;
+  }
 
   virtual void updateLayout(std::shared_ptr<Layout> layout) = 0;
 

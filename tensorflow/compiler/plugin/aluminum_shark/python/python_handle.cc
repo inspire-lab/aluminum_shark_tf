@@ -129,6 +129,8 @@ const char* ComputationHandle::getForcedLayout() const {
 /*  C API              */
 /***********************/
 
+using ::aluminum_shark::operator<<;
+
 // need as reverse mapping to return the context handle when the ctxt result is
 // retrieved
 static std::map<const aluminum_shark::HEContext*, aluminum_shark_Context*>
@@ -251,8 +253,8 @@ void aluminum_shark_DestroyContext(void* context_ptr) {
 // Layout stuff
 
 const char* const* aluminum_shark_GetAvailabeLayouts(size_t* size) {
-  *size = aluminum_shark::LAYOUT_TYPE_STRINGS.size();
-  return aluminum_shark::LAYOUT_TYPE_STRINGS.data();
+  *size = aluminum_shark::LAYOUT_TYPE_C_STRINGS.size();
+  return aluminum_shark::LAYOUT_TYPE_C_STRINGS.data();
 }
 
 // Ciphertext operations
@@ -295,25 +297,21 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
                                    const char* name, const size_t* shape,
                                    int shape_size, const char* layout_type,
                                    void* context_ptr) {
-  AS_LOG_S << "Encrypting Double. Context: " << context_ptr << std::endl;
+  AS_LOG_INFO << "Encrypting Double. Context: " << context_ptr << std::endl;
   aluminum_shark_Context* context =
       static_cast<aluminum_shark_Context*>(context_ptr);
   // read input values
   std::vector<double> ptxt_vec(values, values + size);
-  AS_LOG_S << "Encrypting Double. Values: ";
-  if (aluminum_shark::log()) {
-    aluminum_shark::stream_vector(ptxt_vec);
-  }
-  AS_LOG_SA << " number of values (passed/read) " << size << "/"
-            << ptxt_vec.size() << ", name: " << name << std::endl;
+  AS_LOG_DEBUG << "Encrypting Double. Values: " << ptxt_vec << std::endl;
+
+  AS_LOG_INFO << "number of values (passed/read) " << size << "/"
+              << ptxt_vec.size() << ", name: " << name << std::endl;
 
   // read shape and create layout
-  AS_LOG_S << "Creating layout, shape: " << shape << ", " << shape_size
-           << std::endl;
+  AS_LOG_INFO << "Creating layout, shape: " << shape << ", " << shape_size
+              << std::endl;
   std::vector<size_t> shape_vec(shape, shape + shape_size);
-  if (aluminum_shark::log()) {
-    aluminum_shark::stream_vector(shape_vec);
-  }
+
   AS_LOG_S << "layout: " << layout_type << std::endl;
   aluminum_shark::Layout* layout =
       aluminum_shark::createLayout(layout_type, shape_vec);
@@ -322,6 +320,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   AS_LOG_S << layout->type() << std::endl;
   std::vector<std::vector<double>> ptxt_with_layout =
       layout->layout_vector(ptxt_vec);
+
   AS_LOG_S << "Input layed out" << std::endl;
   std::vector<std::shared_ptr<aluminum_shark::HECtxt>> hectxts;
   for (auto& v : ptxt_with_layout) {
@@ -334,7 +333,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   // create shared_prt with empty ctxt and then copy the result in
   ret->ctxt = std::make_shared<aluminum_shark::Ctxt>(
       hectxts, std::shared_ptr<aluminum_shark::Layout>(layout), name);
-  AS_LOG_S << "new ctxt: " << reinterpret_cast<void*>(ret) << " wrapped object"
+  AS_LOG_S << "new ctxt: " << reinterpret_cast<void*>(ret) << " wrapped object "
            << ret->ctxt << std::endl;
   return ret;
 }
@@ -414,8 +413,7 @@ void aluminum_shark_EnableLogging(bool on) {
 
 // sets the log level
 void aluminum_shark_SetLogLevel(int level) {
-  // TODO RP: implement. does nothing yet.
-  AS_LOG_S << "Log levels do nothing yet";
+  aluminum_shark::set_log_level(level);
 }
 
 }  // extern "C"

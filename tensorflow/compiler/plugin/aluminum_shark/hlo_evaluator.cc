@@ -301,18 +301,23 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
       VLOG(100) << instr->name() << " = " << GetEvaluatedLiteralFor(instr);
     }
   }
-  ss.str("");
-  for (const HloInstruction* instr : computation.instructions()) {
-    ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    for (const HloInstruction* instr : computation.instructions()) {
+      ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
+    }
+    AS_LOG(ss.str());
   }
-  AS_LOG(ss.str());
 
   // invoke result callback
-  auto result_ctxt = static_cast<::aluminum_shark::Ctxt&>(
-      GetEvaluatedCtxtFor(computation.root_instruction()));
+  ::aluminum_shark::Ctxt* result_ctxt =
+      GetEvaluatedCtxtFor(computation.root_instruction());
+  if (!result_ctxt) {
+    AS_LOG_CRITICAL << "no computation result " << std::endl;
+    throw std::runtime_error("no computation result ");
+  }
   AS_LOG_S << "About to invoke result compution result: "
-           << result_ctxt.to_string() << std::endl;
-  std::vector<::aluminum_shark::Ctxt> result{result_ctxt};
+           << result_ctxt->to_string() << std::endl;
+  std::vector<::aluminum_shark::Ctxt> result{*result_ctxt};
   computation_handle_->transfereResults(result);
 
   return GetEvaluatedLiteralFor(computation.root_instruction()).Clone();
@@ -549,8 +554,18 @@ Status AluminumSharkHloEvaluator::HandleReshape(HloInstruction* reshape) {
       evaluated_[reshape],
       GetEvaluatedLiteralFor(reshape->operand(0))
           .Reshape(AsInt64Slice(reshape->shape().dimensions())));
+  AS_LOG_INFO << "reashpe of " << reshape->operand(0)->name() << std::endl;
   // TODO: eventually this needs to be proper reshaping
-  unwrapBaseTxt(reshape, GetEvaluatedCtxtFor(reshape->operand(0)));
+  ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(reshape->operand(0));
+  if (ctxt) {
+    AS_LOG_INFO << "reashpe of  " << reshape->operand(0)->name() << std::endl;
+    const auto& old_layout = ctxt->layoutPointer();
+    old_layout->reshape(
+        *ctxt, ::aluminum_shark::xla_shape_to_shark_shape(reshape->shape()));
+    AS_LOG_INFO << "reashped " << reshape->operand(0)->name() << std::endl;
+    evaluated_ctxt_[reshape] = *ctxt;
+  }
+
   return Status::OK();
 }
 
@@ -558,7 +573,18 @@ Status AluminumSharkHloEvaluator::HandleTranspose(HloInstruction* transpose) {
   evaluated_[transpose] = GetEvaluatedLiteralFor(transpose->operand(0))
                               .Transpose(transpose->dimensions());
   // TODO: eventually this needs to be proper transposing
-  unwrapBaseTxt(transpose, GetEvaluatedCtxtFor(transpose->operand(0)));
+  ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(transpose->operand(0));
+  if (ctxt) {
+    AS_LOG_INFO << "transposing " << transpose->operand(0)->name()
+                << " with shape " << ctxt->shape() << " and permutation [";
+    if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
+      for (auto i : transpose->dimensions()) {
+        AS_LOG_SA << i << ", ";
+      }
+      AS_LOG_SA << std::endl;
+    }
+    evaluated_ctxt_[transpose] = *ctxt;
+  }
   return Status::OK();
 }
 
@@ -889,7 +915,10 @@ Status AluminumSharkHloEvaluator::HandleTuple(HloInstruction* tuple) {
   }
   evaluated_[tuple] = LiteralUtil::MakeTuple(operand_literals);
   // TODO: proper tuple handling
-  unwrapBaseTxt(tuple, GetEvaluatedCtxtFor(tuple->operand(0)));
+  ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(tuple->operand(0));
+  if (ctxt) {
+    evaluated_ctxt_[tuple] = *ctxt;
+  }
 
   return Status::OK();
 }
@@ -1944,21 +1973,21 @@ Status AluminumSharkHloEvaluator::HandleBroadcast(HloInstruction* broadcast) {
       operand.Broadcast(broadcast->shape(), broadcast->dimensions()));
 
   // TODO RP: broadcasting for ciphertexts
-  try {
-    ::aluminum_shark::Ptxt& ptxt_operand =
-        dynamic_cast<::aluminum_shark::Ptxt&>(
-            GetEvaluatedCtxtFor(broadcast->operand(0)));
-    std::shared_ptr<::aluminum_shark::Ptxt> ptxt =
-        std::make_shared<::aluminum_shark::Ptxt>(
-            ptxt_operand.layout().broadcast(
-                ptxt_operand,
-                ::aluminum_shark::xla_shape_to_shark_shape(broadcast->shape()),
-                broadcast->dimensions()));
-    unwrapBaseTxt(broadcast, ptxt);
-  } catch (const std::exception& e) {
-    AS_LOG_S << e.what() << std::endl;
-    throw e;
-  }
+  // try {
+  //   ::aluminum_shark::Ptxt& ptxt_operand =
+  //       dynamic_cast<::aluminum_shark::Ptxt&>(
+  //           GetEvaluatedCtxtFor(broadcast->operand(0)));
+  //   std::shared_ptr<::aluminum_shark::Ptxt> ptxt =
+  //       std::make_shared<::aluminum_shark::Ptxt>(
+  //           ptxt_operand.layout().broadcast(
+  //               ptxt_operand,
+  //               ::aluminum_shark::xla_shape_to_shark_shape(broadcast->shape()),
+  //               broadcast->dimensions()));
+  //   unwrapBaseTxt(broadcast, ptxt);
+  // } catch (const std::exception& e) {
+  //   AS_LOG_S << e.what() << std::endl;
+  //   throw e;
+  // }
 
   return Status::OK();
 }
@@ -1995,8 +2024,11 @@ Status AluminumSharkHloEvaluator::HandleGetTupleElement(
   evaluated_[get_tuple_element] =
       Literal(ShapeUtil::GetTupleElementShape(operand->shape(), index));
 
-  // TODO: proper tuple handling
-  unwrapBaseTxt(get_tuple_element, GetEvaluatedCtxtFor(operand));
+  // TODO RP: proper tuple handling
+  ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(operand);
+  if (ctxt) {
+    evaluated_ctxt_[get_tuple_element] = *ctxt;
+  }
 
   return evaluated_[get_tuple_element].CopyFrom(operand_tuple_literal,
                                                 /*dest_shape_index=*/{},
@@ -2007,19 +2039,14 @@ Status AluminumSharkHloEvaluator::HandleCopy(HloInstruction* copy) {
   TF_RET_CHECK(ShapeUtil::Compatible(copy->shape(), copy->operand(0)->shape()));
   evaluated_[copy] = GetEvaluatedLiteralFor(copy->operand(0)).Clone();
 
-  // cipher- and plaintext copy
-  ::aluminum_shark::BaseTxt& btxt = GetEvaluatedCtxtFor(copy->operand(0));
-  try {
-    // ctxt
-    ::aluminum_shark::Ctxt& ctxt = dynamic_cast<::aluminum_shark::Ctxt&>(btxt);
-    evaluated_ctxt_[copy] = ctxt.deepCopy();
-  } catch (const std::bad_cast& e) {
-    // ptxt
-    ::aluminum_shark::Ptxt& ptxt = dynamic_cast<::aluminum_shark::Ptxt&>(btxt);
-    constant_ptxt_[copy] = ptxt.deepCopy();
-  } catch (const std::exception& e) {
-    AS_LOG_S << e.what() << std::endl;
-    throw e;
+  // cipher- copy
+  AS_LOG_INFO << "looking to copy ctxt from " << copy->operand(0)->name()
+              << std::endl;
+  ::aluminum_shark::Ctxt* ctxt = GetEvaluatedCtxtFor(copy->operand(0));
+  if (ctxt) {
+    AS_LOG_INFO << "copied ctxt from " << copy->operand(0)->name() << std::endl;
+    // TODO RP: create a copy if we need on
+    evaluated_ctxt_[copy] = *ctxt;
   }
 
   return Status::OK();
@@ -2771,6 +2798,15 @@ std::unique_ptr<Array2D<int32>> AluminumSharkHloEvaluator::MatmulArray2D(
     const Array2D<int32>& lhs, const Array2D<int32>& rhs) {
   return MatmulArray2DImpl<int32>(
       lhs, rhs, __xla_cpu_runtime_EigenSingleThreadedMatMulS32);
+}
+
+void AluminumSharkHloEvaluator::set_inplace_ops(
+    std::unordered_set<const HloInstruction*> ops) {
+  inplace_ops = ops;
+}
+
+bool AluminumSharkHloEvaluator::inplace(const HloInstruction* hlo) {
+  return inplace_ops.find(hlo) != inplace_ops.end();
 }
 
 }  // namespace aluminum_shark

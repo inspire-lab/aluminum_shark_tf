@@ -1,9 +1,11 @@
-#ifndef TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H_
-#define TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H_
+#ifndef ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H
+#define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H
 
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
+#include "tensorflow/compiler/plugin/aluminum_shark/hlo_evaluator.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/platform_id.h"
 #include "tensorflow/compiler/xla/service/compiler.h"
@@ -49,6 +51,10 @@ class AluminumSharkCompiler : public Compiler {
 
   se::Platform::Id PlatformId() const override;
 
+  std::unordered_set<const HloInstruction*> FindInplaceOps(HloModule* module);
+
+  void Precompute(HloModule* module, AluminumSharkHloEvaluator* evaluator);
+
  private:
   Status RunHloOptimization(HloModule* hlo_module);
 
@@ -58,4 +64,5 @@ class AluminumSharkCompiler : public Compiler {
 }  // namespace aluminum_shark
 }  // namespace xla
 
-#endif /* TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H_ */
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_COMPILER_H \
+        */

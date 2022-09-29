@@ -1,11 +1,10 @@
-#include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
-
 #include <cstring>
 #include <stdexcept>
 #include <utility>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/exception.h"
@@ -129,19 +128,58 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
-  // we can create a copy here that costs basically nothing two does not contain
-  // data (or at least shouldnt)
+// we can create a copy here that costs basically nothing two does not contain
+// data (or at least shouldnt)
+#ifdef LAYOUT_DEBUG
+  AS_LOG_DEBUG << "decrypting result" << std::endl;
+  try {
+    auto one_dec = one.decryptDouble();
+    AS_LOG_DEBUG << "decrypted: \n "
+                 << PrintWithShape<double>(one_dec, one.shape()) << std::endl;
+  } catch (const std::exception& e) {
+    AS_LOG_CRITICAL << "something messed up" << std::endl;
+    AS_LOG_CRITICAL << e.what() << '\n';
+  }
+#endif
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
   const auto& two_v = copy.getValue();
   auto& one_v = one.getValue();
   try {
-    AS_LOG_S << "simple layout add in place, value sizes: " << one_v.size()
-             << " and " << two_v.size() << std::endl;
+    AS_LOG_INFO << "simple layout add in place, value sizes: " << one_v.size()
+                << " and " << two_v.size() << std::endl;
     for (size_t i = 0; i < size_; ++i) {
-      AS_LOG_S << "ctxt: " << one_v[i]->to_string() << std::endl;
-      AS_LOG_S << "ptxt: " << two_v[i]->to_string() << std::endl;
+#ifdef LAYOUT_DEBUG
+      // decrypt values
+      const HEContext* context = one.getContext();
+      std::vector<double> lhs_dec;
+      std::vector<double> rhs_dec;
+      try {
+        AS_LOG_DEBUG << "decypting lhs" << std::endl;
+        lhs_dec = context->decryptDouble(one_v[i].get());
+      } catch (const std::exception& e) {
+        AS_LOG_CRITICAL << "something messed up" << std::endl;
+        AS_LOG_CRITICAL << e.what() << '\n';
+      }
+
+#else
+      AS_LOG_DEBUG << "ctxt: " << one_v[i]->to_string() << std::endl;
+      AS_LOG_DEBUG << "ptxt: " << two_v[i]->to_string() << std::endl;
+#endif
       one_v[i]->addInPlace(two_v[i].get());
+#ifdef LAYOUT_DEBUG;
+      try {
+        // decoding is bugged atm
+        // AS_LOG_DEBUG << "decoding rhs" << std::endl;
+        // rhs_dec = context->decodeDouble(two_v[i].get());
+        AS_LOG_DEBUG << "decypting resutl" << std::endl;
+        std::vector<double> res_dec = context->decryptDouble(one_v[i].get());
+        AS_LOG_DEBUG << lhs_dec[0] << " + X  = " << res_dec << std::endl;
+      } catch (const std::exception& e) {
+        AS_LOG_CRITICAL << "something messed up" << std::endl;
+        AS_LOG_CRITICAL << e.what() << '\n';
+      }
+#endif
     }
   } catch (const std::exception& e) {
     AS_LOG_S << "add Inplace failed reason: " << e.what() << std::endl;
@@ -481,12 +519,26 @@ Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
 
 Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                                xla::HloInstruction* hlo) const {
+  Ptxt copy = rhs;
+  copy.updateLayout(LAYOUT_TYPE::SIMPLE, lhs.getContext());
 #ifdef LAYOUT_DEBUG
   // decrypt values
   AS_LOG_S << "decypting input" << std::endl;
   try {
     auto lhs_dec = lhs.decryptDouble();
     AS_LOG_S << "decrypted: \n " << PrintWithShape<double>(lhs_dec, lhs.shape())
+             << std::endl;
+  } catch (const std::exception& e) {
+    AS_LOG_S << "something messed up" << std::endl;
+    AS_LOG_S << e.what() << '\n';
+  }
+#endif
+
+#ifdef LAYOUT_DEBUG
+  // decrypt values
+  try {
+    auto rhs_dec = copy.decodeDouble();
+    AS_LOG_S << "decoded: \n " << PrintWithShape<double>(rhs_dec, copy.shape())
              << std::endl;
   } catch (const std::exception& e) {
     AS_LOG_S << "something messed up" << std::endl;
@@ -524,8 +576,6 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   xla::DimensionVector rhs_dim_multipliers = MakeDimMultipliers(rhs_shape);
 
   auto& lhs_v = lhs.getValue();
-  Ptxt copy = rhs;
-  copy.updateLayout(LAYOUT_TYPE::SIMPLE, lhs.getContext());
   auto& rhs_v = copy.getValue();
 
   const int64_t feature_group_count = hlo->feature_group_count();
@@ -535,6 +585,9 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                &lhs_dim_multipliers, &rhs_dim_multipliers, &lhs_v, &rhs_v,
                feature_group_count,
                batch_group_count](const absl::Span<const int64_t> out_index) {
+    AS_LOG_DEBUG << "out index: "
+                 << std::vector<int64_t>(out_index.begin(), out_index.end())
+                 << std::endl;
     // Dimension number applicable for input (lhs).
     const int64_t input_batch_dim = dnums.input_batch_dimension();
     const int64_t input_z_dim = dnums.input_feature_dimension();
@@ -654,8 +707,24 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
             out_index[output_z_dim] * rhs_dim_multipliers[kernel_output_z_dim];
         rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
 
+        AS_LOG_DEBUG << "lhs_v[" << lhs_linear_index << "]) * rhs_v["
+                     << rhs_linear_index << "]" << std::endl;
         HECtxt* temp =
             *(lhs_v[lhs_linear_index]) * rhs_v[rhs_linear_index].get();
+
+#ifdef LAYOUT_DEBUG;
+        try {
+          const HEContext* context = lhs_v[lhs_linear_index]->getContext();
+          AS_LOG_DEBUG << "decypting lhs" << std::endl;
+          auto lhs_dec = context->decryptDouble(lhs_v[lhs_linear_index].get());
+          AS_LOG_DEBUG << "decypting result" << std::endl;
+          auto res_dec = context->decryptDouble(temp);
+          AS_LOG_DEBUG << lhs_dec[0] << " * X  = " << res_dec[0] << std::endl;
+        } catch (const std::exception& e) {
+          AS_LOG_CRITICAL << "something messed up" << std::endl;
+          AS_LOG_CRITICAL << e.what() << '\n';
+        }
+#endif
         if (first) {
           result = temp;
           first = false;
@@ -679,7 +748,12 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   // populate the ctxt vector
   std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
   std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
+#ifndef LAYOUT_DEBUG
   xla::ShapeUtil::ForEachIndexParallel(
+#else
+  // disable Parallel execution for debugging
+  xla::ShapeUtil::ForEachIndex(
+#endif
       result_shape, /*base*/ base_vec, /*count*/ result_shape.dimensions(),
       /*increment*/ incr_vec,
       [&ctxt_vector, &result_shape,
@@ -687,6 +761,9 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             result_shape, multi_index);
         ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+#ifdef LAYOUT_DEBUG
+        return true;
+#endif
       });
 
   Ctxt result(ctxt_vector, std::shared_ptr<Layout>(layout),
@@ -695,9 +772,9 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   // decrypt values
   AS_LOG_S << "decrypting result" << std::endl;
   try {
-    auto lhs_dec = lhs.decryptDouble();
-    AS_LOG_S << "decrypted: \n " << PrintWithShape<double>(lhs_dec, lhs.shape())
-             << std::endl;
+    auto res_dec = result.decryptDouble();
+    AS_LOG_S << "decrypted: \n "
+             << PrintWithShape<double>(res_dec, result.shape()) << std::endl;
   } catch (const std::exception& e) {
     AS_LOG_S << "something messed up" << std::endl;
     AS_LOG_S << e.what() << '\n';
@@ -782,22 +859,21 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
-    AS_LOG_WARNING << "incompatbile shapes: ";
+    AS_LOG_S << "incompatbile shapes: ";
     stream_vector(one.shape());
     AS_LOG_SA << " and ";
     stream_vector(two.shape());
     AS_LOG_SA << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
-  AS_LOG_INFO << "batch layout multiply in place, value sizes: " << one_v.size()
-              << " and " << two_v.size() << std::endl;
-
-  // create function to run in prallel
-  auto func = [&one_v, &two_v](size_t i) {
+  AS_LOG_S << "batch layout multiply in place, value sizes: " << one_v.size()
+           << " and " << two_v.size() << std::endl;
+  for (size_t i = 0; i < one_v.size(); ++i) {
+    // AS_LOG_S << "ctxt one: " << one_v[i]->to_string() << std::endl;
+    // AS_LOG_S << "ctxt two: " << two_v[i]->to_string() << std::endl;
     one_v[i]->multInPlace(two_v[i].get());
-  };
-  run_parallel(0, one_v.size(), func);
-  AS_LOG_INFO << "multiplying done " << std::endl;
+  }
+  AS_LOG_S << "multiplying done " << std::endl;
 }
 
 void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
@@ -813,11 +889,9 @@ void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
                     << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
-  // create function to run in prallel
-  auto func = [&one_v, &two_v](size_t i) {
-    one_v[i]->addInPlace(two_v[i].get());
-  };
-  run_parallel(0, one_v.size(), func);
+  for (size_t i = 0; i < one_v.size(); ++i) {
+    one.getValue()[i]->addInPlace(copy.getValue()[i].get());
+  }
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
@@ -1053,12 +1127,12 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
       // iterate over the colmuns of lhs and rows of lhs
       lhs_index[1] = i;
       rhs_index[0] = i;
-      AS_LOG_DEBUG << lhs_index << " * " << rhs_index << std::endl;
-      AS_LOG_DEBUG << "lhs_v.size() = " << lhs_v.size()
-                   << " index: " << multi_index_to_flat(lhs_index, lhs_shape)
-                   << " , rhs_v.size() = " << rhs_v.size()
-                   << " index: " << multi_index_to_flat(rhs_index, rhs_shape)
-                   << std::endl;
+      AS_LOG_S << lhs_index << " * " << rhs_index << std::endl;
+      AS_LOG_S << "lhs_v.size() = " << lhs_v.size()
+               << " index: " << multi_index_to_flat(lhs_index, lhs_shape)
+               << " , rhs_v.size() = " << rhs_v.size()
+               << "index: " << multi_index_to_flat(rhs_index, rhs_shape)
+               << std::endl;
       HECtxt* temp = *(lhs_v[multi_index_to_flat(lhs_index, lhs_shape)]) *
                      rhs_v[multi_index_to_flat(rhs_index, rhs_shape)].get();
 #ifdef LAYOUT_DEBUG
@@ -1167,23 +1241,21 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   std::stringstream result_name;
   result_name << one.getName() << " X " << two.getName();
   Ctxt result_ctxt = Ctxt(result_ctxts, result_layout, result_name.str());
-#ifdef LAYOUT_DEBUG
   try {
-    AS_LOG_DEBUG << "mat mult result: " << ShapePrint(result_ctxt.shape())
-                 << std::endl;
-    AS_LOG_DEBUG << "decryptions: \n"
-                 << PrintWithShape<double>(result_ctxt.decryptDouble(),
-                                           result_ctxt.shape())
-                 << std::endl;
+    AS_LOG_S << "mat mult result: " << ShapePrint(result_ctxt.shape())
+             << std::endl;
+    AS_LOG_S << "decryptions: \n"
+             << PrintWithShape<double>(result_ctxt.decryptDouble(),
+                                       result_ctxt.shape())
+             << std::endl;
   } catch (const decryption_error& e) {
     AS_LOG_S << e.what() << std::endl;
   } catch (const std::exception& e) {
     AS_LOG_S << e.what() << std::endl;
     throw;
   }
-#endif
   return result_ctxt;
-#else  //  ALUMINUM_SHARK_MINIMAL_LAYOUT
+#else
   AS_LOG_S << "Batch layout matrix multiplication not supported in minimal mode"
            << std::endl;
   throw std::runtime_error(
@@ -1197,7 +1269,7 @@ Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ctxt& two) const {
 Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ptxt& two) const {
   // creating a non const copy and update the layout
   Ptxt copy = two;
-  copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
+  copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
   return mat_mult_internal<Ptxt, HEPtxt>(one, copy);
 }
 // More general matrix multplication for hihger dimensional matrices
@@ -1266,7 +1338,6 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   const auto& window = hlo->window();
   // we need to "fake out" the system by creating fake shapes where the batch
   // dimension is 1, for both the lhs and the result
-  AS_LOG_INFO << "creating shapes " << std::endl;
   Shape temp = xla_shape_to_shark_shape(hlo->shape());
   temp[0] = 1;
   const xla::Shape& result_shape = create_xla_dummy_shape(temp);
@@ -1303,13 +1374,12 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   const int64_t feature_group_count = hlo->feature_group_count();
   const int64_t batch_group_count = hlo->batch_group_count();
 
-  AS_LOG_INFO << "Convolution batch group count = " << batch_group_count
-              << "\n\t"
-              << "input_batch_dimension = " << dnums.input_batch_dimension()
-              << "\n\t"
-              << "output_batch_dimension = " << dnums.output_batch_dimension()
-              << std::endl;
-  AS_LOG_INFO << "creating computation function " << std::endl;
+  AS_LOG_S << "Convolution batch group count = " << batch_group_count << "\n\t"
+           << "input_batch_dimension = " << dnums.input_batch_dimension()
+           << "\n\t"
+           << "output_batch_dimension = " << dnums.output_batch_dimension()
+           << std::endl;
+
   auto func = [&window_shape, &dnums, &lhs_shape, &rhs_shape, &window,
                &lhs_dim_multipliers, &rhs_dim_multipliers, &lhs_v, &rhs_v,
                feature_group_count,
@@ -1434,7 +1504,7 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
         rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
 
         HECtxt* temp =
-            lhs_v[lhs_linear_index]->operator*(rhs_v[rhs_linear_index].get());
+            *(lhs_v[lhs_linear_index]) * rhs_v[rhs_linear_index].get();
         if (first) {
           result = temp;
           first = false;

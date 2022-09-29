@@ -53,17 +53,27 @@ StatusOr<Literal> AluminumSharkExecutable::Evaluate(
 
   evaluator_->ResetVisitStates();
 
-  // create logging string
-  for (auto& l : arg_literals) {
-    ss << l << ", ";
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    // create logging string
+    for (auto& l : arg_literals) {
+      ss << l << ", ";
+    }
+    AS_LOG_DEBUG << "Evaluate: " << std::to_string(arg_literals.size())
+                 << " literals: " << ss.str();
+    ss.str("");
+  } else if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
+    // create logging string
+    for (auto& l : arg_literals) {
+      ss << l.shape().ToString() << ", ";
+    }
+    AS_LOG_INFO << "Evaluate: " << std::to_string(arg_literals.size())
+                << " literals: " << ss.str();
+  }
+  auto ret = evaluator_->Evaluate(computation, arg_literals);
+  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    AS_LOG_DEBUG << "computation result:" << ret.ValueOrDie() << std::endl;
   }
 
-  AS_LOG("Evaluate: " + std::to_string(arg_literals.size()) +
-         " literals: " + ss.str());
-  ss.str("");
-  auto ret = evaluator_->Evaluate(computation, arg_literals);
-  ss << ret.ValueOrDie();
-  AS_LOG(ss.str());
   return ret;
 }
 

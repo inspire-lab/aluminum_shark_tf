@@ -291,7 +291,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     parent_->evaluated_[convert] = std::move(result);
     // on encrypted data we don't actually convert the data. so we just return
     // the input
-    parent_->unwrapBaseTxt(convert, parent_->GetEvaluatedCtxtFor(operand));
+    ::aluminum_shark::Ctxt* ctxt = parent_->GetEvaluatedCtxtFor(operand);
+    if (ctxt) {
+      parent_->evaluated_ctxt_[convert] = *ctxt;
+    }
     return Status::OK();
   }
 
@@ -574,12 +577,26 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
               return ElementwiseT(ToArithmeticSafeType(lhs_elem) *
                                   ToArithmeticSafeType(rhs_elem));
             }));
-    parent_->unwrapBaseTxt(
-        multiply,
-        ElementWiseBinaryOpCtxt(multiply, [](::aluminum_shark::BaseTxt& lhs,
-                                             ::aluminum_shark::BaseTxt& rhs) {
-          return lhs * rhs;
-        }));
+
+    if (parent_->inplace(multiply)) {
+      ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
+          multiply,
+          [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            lhs *= rhs;
+            return &lhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
+      }
+    } else {
+      auto ctxt_ptr = ElementWiseBinaryOpCtxt(
+          multiply, [](::aluminum_shark::Ctxt& lhs,
+                       ::aluminum_shark::BaseTxt& rhs) { return lhs * rhs; });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
+      }
+    }
+
     return Status::OK();
   }
 
@@ -595,17 +612,33 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleAdd(HloInstruction* add) override {
+    // plain text
     TF_ASSIGN_OR_RETURN(parent_->evaluated_[add],
                         ElementWiseBinaryOp(add, [](ElementwiseT lhs_elem,
                                                     ElementwiseT rhs_elem) {
                           return ElementwiseT(ToArithmeticSafeType(lhs_elem) +
                                               ToArithmeticSafeType(rhs_elem));
                         }));
-    parent_->unwrapBaseTxt(
-        add, ElementWiseBinaryOpCtxt(add, [](::aluminum_shark::BaseTxt& lhs,
-                                             ::aluminum_shark::BaseTxt& rhs) {
-          return lhs + rhs;
-        }));
+
+    if (parent_->inplace(add)) {
+      ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
+          add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            lhs += rhs;
+            return &lhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[add] = *ctxt_ptr;
+      }
+    } else {
+      auto ctxt_ptr = ElementWiseBinaryOpCtxt(
+          add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
+            return lhs + rhs;
+          });
+      if (ctxt_ptr) {
+        parent_->evaluated_ctxt_[add] = *ctxt_ptr;
+      }
+    }
+
     return Status::OK();
   }
 
@@ -785,11 +818,13 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   Status HandleRsqrt(HloInstruction* rsqrt) override {
+    // plaintext
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[rsqrt],
         ElementWiseUnaryOp(rsqrt, [](ElementwiseT elem_operand) {
           return static_cast<ElementwiseT>(1) / std::sqrt(elem_operand);
         }));
+
     return Status::OK();
   }
 
@@ -1297,16 +1332,28 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     };
 
     Literal result(result_shape);
-    TF_RETURN_IF_ERROR(result.PopulateParallel<ReturnT>(func));
+    // TODO RP: renable this in case of debug inputs
+    if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+      TF_RETURN_IF_ERROR(result.PopulateParallel<ReturnT>(func));
+    }
     parent_->evaluated_[conv] = std::move(result);
 
-    AS_LOG_S << "convolution on encrypted data" << std::endl;
-    ::aluminum_shark::Ctxt& lhs_ctxt = dynamic_cast<::aluminum_shark::Ctxt&>(
-        parent_->GetEvaluatedCtxtFor(conv->operand(0)));
-    ::aluminum_shark::Ptxt& rhs_ptxt = dynamic_cast<::aluminum_shark::Ptxt&>(
-        parent_->GetEvaluatedCtxtFor(conv->operand(1)));
-    parent_->evaluated_ctxt_[conv] =
-        lhs_ctxt.layout().convolution(lhs_ctxt, rhs_ptxt, conv);
+    // can be costly to create the string. only do it if we need to log it
+    if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+      AS_LOG_DEBUG << "Conv plaintext result "
+                   << parent_->evaluated_[conv].ToString();
+    }
+
+    ::aluminum_shark::Ctxt* ctxt =
+        parent_->GetEvaluatedCtxtFor(conv->operand(0));
+    if (ctxt) {
+      AS_LOG_INFO << "convolution on encrypted data" << conv->operand(1)->name()
+                  << std::endl;
+      parent_->evaluated_ctxt_[conv] = ctxt->layout().convolution(
+          *ctxt,
+          ::aluminum_shark::Ptxt(rhs_literal, conv->operand(1)->name() + "rhs"),
+          conv);
+    }
     return Status::OK();
   }
 
@@ -1373,8 +1420,6 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     // run on ctxt
     const HloInstruction* lhs = dot->operand(0);
     const HloInstruction* rhs = dot->operand(1);
-    ::aluminum_shark::BaseTxt& lhs_btxt = parent_->GetEvaluatedCtxtFor(lhs);
-    ::aluminum_shark::BaseTxt& rhs_btxt = parent_->GetEvaluatedCtxtFor(rhs);
 
     const auto& dnums = dot->dot_dimension_numbers();
     const int64_t lhs_contracting_dimension =
@@ -1386,43 +1431,29 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
              << " rhs contracting dim " << rhs_contracting_dimension
              << std::endl;
 
-    // throw std::exception();
+    ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
+    ::aluminum_shark::Ctxt* rhs_ctxt = parent_->GetEvaluatedCtxtFor(rhs);
+    if (lhs_ctxt || rhs_ctxt) {
+      ::aluminum_shark::Ctxt result;
+      bool done = false;
+      // correct types
+      if (!lhs_ctxt) {
+        AS_LOG_CRITICAL << "left-hand side of dot needs to be Ctxt"
+                        << std::endl;
+        throw std::invalid_argument("left-hand side of dot needs to be Ctxt");
+      }
+      const ::aluminum_shark::Layout& layout = lhs_ctxt->layout();
+      if (rhs_ctxt) {
+        result = layout.dot(*lhs_ctxt, *rhs_ctxt);
+      } else {
+        result = layout.dot(
+            *lhs_ctxt, ::aluminum_shark::Ptxt(
+                           parent_->GetEvaluatedLiteralFor(rhs), rhs->name()));
+      }
 
-    const ::aluminum_shark::Layout& layout = lhs_btxt.layout();
-    ::aluminum_shark::Ctxt result;
-    bool done = false;
-    // cast to the correct types
-    try {
-      // at the moment the lhs should always be a Ctxt.
-      ::aluminum_shark::Ctxt& lhs_ctxt =
-          dynamic_cast<::aluminum_shark::Ctxt&>(lhs_btxt);
-      try {
-        // rhs is a ctxt
-        ::aluminum_shark::Ctxt& rhs_ctxt =
-            dynamic_cast<::aluminum_shark::Ctxt&>(rhs_btxt);
-        result = layout.dot(lhs_ctxt, rhs_ctxt);
-        done = true;
-      } catch (const std::bad_cast e) {
-        // that's ok. ignore. other exceptions are handled by the outer catch
-        // block
-      }
-      if (!done) {
-        // no try cat in here. if something goes wrong the outer block will
-        // handle it
-        // rhs is a ptxt
-        ::aluminum_shark::Ptxt& rhs_ptxt =
-            dynamic_cast<::aluminum_shark::Ptxt&>(rhs_btxt);
-        result = layout.dot(lhs_ctxt, rhs_ptxt);
-      }
-    } catch (const std::exception& e) {
-      // log exception and rethrow
-      AS_LOG_S << e.what() << std::endl;
-      throw e;
+      // register result with parent
+      parent_->evaluated_ctxt_[dot] = result;
     }
-
-    // register result with parent
-    parent_->evaluated_ctxt_[dot] = result;
-
     if (dot->dot_dimension_numbers().rhs_contracting_dimensions_size() == 1 &&
         parent_->use_fast_path_ &&
         ShapeUtil::SameElementType(dot->operand(0)->shape(), dot->shape()) &&
@@ -1449,9 +1480,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     CHECK(ShapeUtil::SameElementType(lhs->shape(), rhs->shape()));
     CHECK(ShapeUtil::SameElementType(lhs->shape(), dot->shape()));
 
-    AS_LOG_S << " Handling Dot operation: " << lhs->shape().ToString() << " x "
-             << rhs->shape().ToString() << " -> " << dot->ToString()
-             << std::endl;
+    AS_LOG_INFO << " Handling Dot operation: " << lhs->shape().ToString()
+                << " x " << rhs->shape().ToString() << " -> " << dot->ToString()
+                << std::endl;
 
     // There must be 1 and only 1 Contracting dimension for lhs and rhs.
     const int64_t lhs_contracting_dimension =
@@ -1568,79 +1599,52 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     }
     const int64_t total_contraction_size = Product(accumulate_index_sizes);
     Literal result(dot->shape());
-    TF_RETURN_IF_ERROR(
-        result.Populate<ReturnT>([&](absl::Span<const int64_t> result_index) {
-          ElementwiseT result_val = static_cast<ElementwiseT>(0);
+    // TODO RP: enable if debug input is present
+    if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+      TF_RETURN_IF_ERROR(
+          result.Populate<ReturnT>([&](absl::Span<const int64_t> result_index) {
+            ElementwiseT result_val = static_cast<ElementwiseT>(0);
 
-          for (int64_t i = 0; i < result_index.size(); i++) {
-            *result_index_locations[i].first = result_index[i];
-            AS_LOG_SA << "first: " << result_index[i] << std::endl;
-            if (result_index_locations[i].second) {
-              *result_index_locations[i].second = result_index[i];
-              AS_LOG_SA << "second: " << result_index[i] << std::endl;
-            }
-          }
-
-          // Accumulates resulting product along the contracted dimension.
-          absl::InlinedVector<int64_t, kInlineRank> accumulate_index(
-              accumulate_index_sizes.size(), 0);
-          for (int64_t k = 0; k < total_contraction_size; k++) {
-            for (int64_t i = 0; i < accumulate_index_sizes.size(); ++i) {
-              *(accumulate_index_locations[i].first) = accumulate_index[i];
-              *(accumulate_index_locations[i].second) = accumulate_index[i];
-            }
-
-            ElementwiseT lhs_val(lhs_literal.Get<ReturnT>(lhs_index));
-            ElementwiseT rhs_val(rhs_literal.Get<ReturnT>(rhs_index));
-            result_val +=
-                ToArithmeticSafeType(lhs_val) * ToArithmeticSafeType(rhs_val);
-
-            // If there are no contracting dimension accumulate_index_sizes is
-            // empty, do not try to count down from -1 to 0 since it is and
-            // infinite loop.
-            if (!accumulate_index_sizes.empty()) {
-              for (int64_t i = accumulate_index_sizes.size() - 1; i >= 0; --i) {
-                int64_t value = ++accumulate_index[i];
-                if (value != accumulate_index_sizes[i]) {
-                  break;
-                }
-                accumulate_index[i] = 0;
+            for (int64_t i = 0; i < result_index.size(); i++) {
+              *result_index_locations[i].first = result_index[i];
+              if (result_index_locations[i].second) {
+                *result_index_locations[i].second = result_index[i];
               }
             }
-          }
 
-          AS_LOG_S << "Matrix multiplication: " << std::endl;
-          AS_LOG_SA << "\t [";
-          for (const auto& v : result_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] = [";
-          for (const auto& v : lhs_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] x [";
-          for (const auto& v : rhs_index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "] = " << static_cast<ReturnT>(result_val) << std::endl;
+            // Accumulates resulting product along the contracted dimension.
+            absl::InlinedVector<int64_t, kInlineRank> accumulate_index(
+                accumulate_index_sizes.size(), 0);
+            for (int64_t k = 0; k < total_contraction_size; k++) {
+              for (int64_t i = 0; i < accumulate_index_sizes.size(); ++i) {
+                *(accumulate_index_locations[i].first) = accumulate_index[i];
+                *(accumulate_index_locations[i].second) = accumulate_index[i];
+              }
 
-          return static_cast<ReturnT>(result_val);
-        }));
+              ElementwiseT lhs_val(lhs_literal.Get<ReturnT>(lhs_index));
+              ElementwiseT rhs_val(rhs_literal.Get<ReturnT>(rhs_index));
+              result_val +=
+                  ToArithmeticSafeType(lhs_val) * ToArithmeticSafeType(rhs_val);
 
-    ShapeUtil::ForEachSubshape(
-        result.shape(),
-        [&](const Shape& subshape, const ShapeIndex& index) -> void {
-          auto data = result.data<ReturnT>(index);
-          AS_LOG_SA << "[";
-          for (const auto& v : index) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "]: [";
-          for (const auto& v : data) {
-            AS_LOG_SA << v << ", ";
-          }
-          AS_LOG_SA << "]" << std::endl;
-        });
+              // If there are no contracting dimension accumulate_index_sizes is
+              // empty, do not try to count down from -1 to 0 since it is and
+              // infinite loop.
+              if (!accumulate_index_sizes.empty()) {
+                for (int64_t i = accumulate_index_sizes.size() - 1; i >= 0;
+                     --i) {
+                  int64_t value = ++accumulate_index[i];
+                  if (value != accumulate_index_sizes[i]) {
+                    break;
+                  }
+                  accumulate_index[i] = 0;
+                }
+              }
+            }
+            return static_cast<ReturnT>(result_val);
+          }));
+
+      AS_LOG_S << result.ToString() << std::endl;
+    }
     parent_->evaluated_[dot] = std::move(result);
     return Status::OK();
   }
@@ -3130,21 +3134,14 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
 
-    AS_LOG("ElementWiseBinaryOp " + instruction->name() +
-           " : Literal 1: " + lhs_literal.ToStringWithLayout() +
-           " Literal 2: " + rhs_literal.ToStringWithLayout());
+    // AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+    //        " : Literal 1: " + lhs_literal.ToStringWithLayout() +
+    //        " Literal 2: " + rhs_literal.ToStringWithLayout());
 
     Literal result(shape);
 
     TF_RETURN_IF_ERROR(
         result.Populate<ReturnT>([&](absl::Span<const int64_t> multi_index) {
-          std::stringstream ss;
-          ss << "multi_index[";
-          for (const auto& i : multi_index) {
-            ss << i << ", ";
-          }
-          ss << "]";
-          AS_LOG(ss.str());
           return ConvertBinaryFunction(binary_op)(
               lhs_literal.Get<ReturnT>(multi_index),
               rhs_literal.Get<ReturnT>(multi_index));
@@ -3152,10 +3149,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     return result;
   }
 
-  std::shared_ptr<::aluminum_shark::BaseTxt> ElementWiseBinaryOpCtxt(
+  ::aluminum_shark::Ctxt* ElementWiseBinaryOpCtxtInplace(
       HloInstruction* instruction,
-      const std::function<std::shared_ptr<::aluminum_shark::BaseTxt>(
-          ::aluminum_shark::BaseTxt&, ::aluminum_shark::BaseTxt&)>& binary_op) {
+      const std::function<::aluminum_shark::Ctxt*(
+          ::aluminum_shark::Ctxt&, ::aluminum_shark::BaseTxt&)>& binary_op) {
     const auto shape = instruction->shape();
     const auto* lhs = instruction->operand(0);
     const auto* rhs = instruction->operand(1);
@@ -3165,16 +3162,62 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
 
-    ::aluminum_shark::BaseTxt& lhs_btxt = parent_->GetEvaluatedCtxtFor(lhs);
-    ::aluminum_shark::BaseTxt& rhs_btxt = parent_->GetEvaluatedCtxtFor(rhs);
+    ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
+    ::aluminum_shark::Ctxt* rhs_ctxt = parent_->GetEvaluatedCtxtFor(rhs);
+    if (!lhs_ctxt && !rhs_ctxt) {
+      AS_LOG_INFO << "no ctxt involved in instruction " << instruction->name()
+                  << " returing nullptr" << std::endl;
+      return nullptr;
+    }
 
-    AS_LOG("ElementWiseBinaryOp " + instruction->name() +
-           "  on Ctxt: Ctxt 1: " + lhs_btxt.to_string() +
-           " Ctxt 2: " + rhs_btxt.to_string());
+    if (rhs_ctxt) {
+      if (!lhs_ctxt) {
+        ::aluminum_shark::Ptxt ptxt(lhs_literal,
+                                    instruction->operand(0)->name());
+        return binary_op(*rhs_ctxt, ptxt);
+      }
+      AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+             "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
+             " Ctxt 2: " + rhs_ctxt->to_string());
+      return binary_op(*lhs_ctxt, *rhs_ctxt);
+    }
+    AS_LOG_INFO << instruction->name() << " ctxt and plaintext" << std::endl;
+    ::aluminum_shark::Ptxt ptxt(rhs_literal, instruction->operand(1)->name());
+    return binary_op(*lhs_ctxt, ptxt);
+  }
 
-    std::shared_ptr<::aluminum_shark::BaseTxt> shrd_ptr =
-        binary_op(lhs_btxt, rhs_btxt);
-    return shrd_ptr;
+  std::shared_ptr<::aluminum_shark::Ctxt> ElementWiseBinaryOpCtxt(
+      HloInstruction* instruction,
+      const std::function<std::shared_ptr<::aluminum_shark::BaseTxt>(
+          ::aluminum_shark::Ctxt&, ::aluminum_shark::BaseTxt&)>& binary_op) {
+    const auto shape = instruction->shape();
+    const auto* lhs = instruction->operand(0);
+    const auto* rhs = instruction->operand(1);
+    // TF_RET_CHECK(ShapeUtil::SameDimensions(shape, rhs->shape()));
+    // TF_RET_CHECK(ShapeUtil::SameDimensions(lhs->shape(), rhs->shape()));
+
+    const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
+    const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
+
+    ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
+    ::aluminum_shark::Ctxt* rhs_ctxt = parent_->GetEvaluatedCtxtFor(rhs);
+    if (!lhs_ctxt && !rhs_ctxt) {
+      AS_LOG_INFO << "no ctxt involved in instruction " << instruction->name()
+                  << " returing nullptr" << std::endl;
+      return std::shared_ptr<::aluminum_shark::Ctxt>();
+    }
+
+    if (rhs_ctxt) {
+      AS_LOG("ElementWiseBinaryOp " + instruction->name() +
+             "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
+             " Ctxt 2: " + rhs_ctxt->to_string());
+      return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
+          binary_op(*lhs_ctxt, *rhs_ctxt));
+    }
+    AS_LOG_INFO << instruction->name() << " ctxt and plaintext" << std::endl;
+    ::aluminum_shark::Ptxt ptxt(rhs_literal, instruction->operand(1)->name());
+    return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
+        binary_op(*lhs_ctxt, ptxt));
   }
 
   template <typename LhsType, typename RhsType, typename EhsType>
