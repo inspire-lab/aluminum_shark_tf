@@ -117,7 +117,7 @@ class HEPtxt {
  public:
   virtual ~HEPtxt(){};
 
-  virtual std::string& to_string() const = 0;
+  virtual std::string to_string() const = 0;
 
   virtual const HEContext* getContext() const = 0;
 
