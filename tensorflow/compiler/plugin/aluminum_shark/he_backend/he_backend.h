@@ -43,6 +43,10 @@ class HEBackend {
   virtual const std::string& to_string() = 0;
   virtual const API_VERSION& api_version() = 0;
 
+  // if true ciphertext masking checks if masks are only 0 and 1. false disables
+  // the check. Defaults to true
+  virtual void use_safe_masking(bool on_off) = 0;
+
  private:
   std::shared_ptr<void> lib_handle_;
   friend std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path);
@@ -196,8 +200,8 @@ class HECtxt {
   virtual HECtxt* addInPlace(double other) = 0;
 
   // subtraction
-  virtual HECtxt* operator-(const HEPtxt* other) = 0;
-  virtual HECtxt* subInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator-(HEPtxt* other) = 0;
+  virtual HECtxt* subInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator-(long other) = 0;
   virtual HECtxt* subInPlace(long other) = 0;
   virtual HECtxt* operator-(double other) = 0;
@@ -210,6 +214,11 @@ class HECtxt {
   virtual HECtxt* multInPlace(long other) = 0;
   virtual HECtxt* operator*(double other) = 0;
   virtual HECtxt* multInPlace(double other) = 0;
+
+  // masking. a special kind of multiplication where the right hand side
+  // contains only 0s and 1s
+  virtual HECtxt* mask(HEPtxt* other) = 0;
+  virtual HECtxt* maskInPlace(HEPtxt* other) = 0;
 
   // Rotate
   virtual HECtxt* rotate(int steps) = 0;
