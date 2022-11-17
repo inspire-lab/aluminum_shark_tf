@@ -1,6 +1,8 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 
 #include <cstring>
+#include <functional>
+#include <map>
 #include <stdexcept>
 #include <utility>
 
@@ -29,7 +31,7 @@ bool warning_layout_debug_logged = [] {
 
 namespace aluminum_shark {
 
-const std::vector<std::string> LAYOUT_TYPE_STRINGS{"simple", "batch"};
+const std::vector<std::string> LAYOUT_TYPE_STRINGS{"simple", "batch", "e2dm"};
 const std::vector<const char*> LAYOUT_TYPE_C_STRINGS = [] {
   std::vector<const char*> temp;
   for (const auto& s : LAYOUT_TYPE_STRINGS) {
@@ -1521,28 +1523,6 @@ template Ctxt BatchLayout::mat_mult_internal<Ptxt, HEPtxt>(
 
 // Free functions
 
-Layout* createLayout(const char* type, const Shape& shape) {
-  LAYOUT_TYPE lt = string_to_layout_type(type);
-  return createLayout(lt, shape);
-}
-
-Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape) {
-  Layout* layout;
-  switch (type) {
-    case LAYOUT_TYPE::BATCH:
-      layout = new BatchLayout(shape);
-      break;
-    case LAYOUT_TYPE::UNSUPPORTED:
-      AS_LOG_S << "unsupported layout \"" << type
-               << "\" passed. Falling back to simple layout" << std::endl;
-    default:
-      layout = new SimpleLayout(shape);
-      break;
-  }
-  layout->init();
-  return layout;
-}
-
 // helpers
 
 std::ostream& operator<<(std::ostream& os, const Layout& layout) {
@@ -1566,5 +1546,53 @@ Shape xla_shape_to_shark_shape(const xla::Shape& shape) {
   return ret;
 }
 #endif
+
+// layout registry
+static std::map<const LAYOUT_TYPE, std::function<Layout*(const Shape& shape)>>&
+get_registry() {
+  static std::map<const LAYOUT_TYPE, std::function<Layout*(const Shape& shape)>>
+      reg;
+  return reg;
+}
+
+void registerLayout(LAYOUT_TYPE type,
+                    std::function<Layout*(const Shape& shape)> factory) {
+  get_registry()[type] = factory;
+}
+
+Layout* createLayout(const char* type, const Shape& shape) {
+  LAYOUT_TYPE lt = string_to_layout_type(type);
+  return createLayout(lt, shape);
+}
+
+Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape) {
+  auto& layout_registry = get_registry();
+  auto it = layout_registry.find(type);
+  if (it == layout_registry.end()) {
+    AS_LOG_CRITICAL << "unsupported layout " << type << std::endl;
+    throw std::runtime_error("unsupported layout");
+  }
+  Layout* layout = it->second(shape);
+  layout->init();
+  return layout;
+}
+
+// register simple layout
+static bool simple_init = [] {
+  AS_LOG_DEBUG << "Simple layout registerd" << std::endl;
+  // create factory function
+  auto factory = [](const Shape& shape) { return new SimpleLayout(shape); };
+  registerLayout(LAYOUT_TYPE::SIMPLE, factory);
+  return true;
+}();
+
+// register batch layout
+static bool batch_init = [] {
+  // create factory function
+  AS_LOG_DEBUG << "Batch layout registerd" << std::endl;
+  auto factory = [](const Shape& shape) { return new BatchLayout(shape); };
+  registerLayout(LAYOUT_TYPE::BATCH, factory);
+  return true;
+}();
 
 }  // namespace aluminum_shark

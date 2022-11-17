@@ -24,7 +24,7 @@
 
 namespace aluminum_shark {
 
-enum LAYOUT_TYPE { UNSUPPORTED = -1, SIMPLE, BATCH };
+enum LAYOUT_TYPE { UNSUPPORTED = -1, SIMPLE, BATCH, E2DM };
 
 extern const std::vector<std::string> LAYOUT_TYPE_STRINGS;
 extern const std::vector<const char*> LAYOUT_TYPE_C_STRINGS;
@@ -407,6 +407,9 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
   }
   return std::vector<std::shared_ptr<HECtxt>>{std::shared_ptr<HECtxt>(result)};
 }
+
+void registerLayout(LAYOUT_TYPE type,
+                    std::function<Layout*(const Shape& shape)> factory);
 
 std::ostream& operator<<(std::ostream& os, const Layout& layout);
 

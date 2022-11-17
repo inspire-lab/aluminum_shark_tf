@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#define ALUMINUM_SHARK_API_VERSION "0.2.0"
+#define ALUMINUM_SHARK_API_VERSION "0.3.0"
 #define ALUMINUM_SHARK_API_VERSION_MAJOR 0
-#define ALUMINUM_SHARK_API_VERSION_MINOR 2
+#define ALUMINUM_SHARK_API_VERSION_MINOR 3
 #define ALUMINUM_SHARK_API_VERSION_PATCH 0
 
 namespace aluminum_shark {
@@ -117,7 +117,7 @@ class HEPtxt {
  public:
   virtual ~HEPtxt(){};
 
-  virtual const std::string& to_string() const = 0;
+  virtual std::string to_string() const = 0;
 
   virtual const HEContext* getContext() const = 0;
 
@@ -167,7 +167,7 @@ class HECtxt {
  public:
   virtual ~HECtxt(){};
 
-  virtual const std::string& to_string() const = 0;
+  virtual std::string to_string() const = 0;
 
   virtual const HEContext* getContext() const = 0;
 
@@ -196,8 +196,8 @@ class HECtxt {
   virtual HECtxt* addInPlace(double other) = 0;
 
   // subtraction
-  virtual HECtxt* operator-(const HEPtxt* other) = 0;
-  virtual HECtxt* subInPlace(const HEPtxt* other) = 0;
+  virtual HECtxt* operator-(HEPtxt* other) = 0;
+  virtual HECtxt* subInPlace(HEPtxt* other) = 0;
   virtual HECtxt* operator-(long other) = 0;
   virtual HECtxt* subInPlace(long other) = 0;
   virtual HECtxt* operator-(double other) = 0;
