@@ -10,10 +10,18 @@ package(
 )
 
 cc_library(
+    name = "arg_utils",
+    srcs = ["arg_utils.cc"],
+    hdrs = ["arg_utils.h"],
+    deps = ["//tensorflow/compiler/plugin/aluminum_shark/he_backend"],
+)
+
+cc_library(
     name = "python_handle",
     srcs = ["python_handle.cc"],
     hdrs = ["python_handle.h"],
     deps = [
+        ":arg_utils",
         "//tensorflow/compiler/plugin/aluminum_shark:ctxt",
         "//tensorflow/compiler/plugin/aluminum_shark:logging",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",

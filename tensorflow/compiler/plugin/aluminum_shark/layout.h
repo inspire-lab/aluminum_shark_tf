@@ -374,6 +374,7 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
   auto iter_two = two.first;
   AS_LOG_S << "starting simple dot" << std::endl;
   HECtxt* result = **(one.first) * two.first->get();
+  AS_LOG_S << "starting simple dot" << std::endl;
 #ifdef LAYOUT_DEBUG
   const HEContext* context = result->getContext();
   AS_LOG_S << "decrypted: " << context->decryptDouble(one.first->get())[0]

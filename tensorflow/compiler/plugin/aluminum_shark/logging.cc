@@ -12,6 +12,8 @@ bool log_on = std::getenv("ALUMINUM_SHARK_LOGGING") == nullptr
                   ? false
                   : std::stoi(std::getenv("ALUMINUM_SHARK_LOGGING")) == 1;
 int log_level = aluminum_shark::AS_WARNING;
+
+std::string log_prefix = "Aluminum Shark";
 }  // namespace
 
 namespace aluminum_shark {
@@ -44,6 +46,10 @@ bool log() { return log_on; }
 bool log(int level) { return level >= log_level; }
 
 void set_log_level(int level) { log_level = level; }
+
+void set_log_prefix(const std::string& prefix) { log_prefix = prefix; }
+
+const std::string& get_log_prefix() { return log_prefix; }
 
 NullStream& nullstream() {
   static NullStream nullstream;
