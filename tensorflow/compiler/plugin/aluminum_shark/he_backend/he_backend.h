@@ -10,6 +10,29 @@
 #define ALUMINUM_SHARK_API_VERSION_MINOR 3
 #define ALUMINUM_SHARK_API_VERSION_PATCH 0
 
+extern "C" {
+// struct to transport data between python and c++.
+struct aluminum_shark_Argument {
+  const char* name;
+  // 0: int
+  // 1: double
+  // 2: string
+  uint type;
+
+  // if true the `array_` member will point to an array containing `size_`
+  // elements of `type`.
+  bool is_array = false;
+
+  // data holding variables
+  long int_;
+  double double_;
+  const char* string_;
+  // holds data if `is_array` == ture.
+  void* array_ = nullptr;
+  size_t size_;
+};
+}  // extern "C"
+
 namespace aluminum_shark {
 
 struct API_VERSION {
@@ -38,6 +61,9 @@ class HEBackend {
   virtual HEContext* createContextCKKS(size_t poly_modulus_degree,
                                        const std::vector<int>& coeff_modulus,
                                        double scale) = 0;
+
+  virtual HEContext* createContextCKKS(
+      std::vector<aluminum_shark_Argument> arguments) = 0;
 
   virtual const std::string& name() = 0;
   virtual const std::string& to_string() = 0;
