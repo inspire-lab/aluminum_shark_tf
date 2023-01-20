@@ -52,6 +52,26 @@ cc_library(
 )
 
 cc_library(
+    name = "e2dm_layout",
+    srcs = ["e2dm_layout.cc"],
+    hdrs = [
+        "e2dm_layout.h",
+    ],
+    deps = [
+        ":layout",
+        ":logging",
+        "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:exception",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:parallel",
+        "//tensorflow/compiler/xla:shape_util",
+        "//tensorflow/compiler/xla/service:hlo",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "base_txt",
     srcs = ["base_txt.cc"],
     hdrs = ["base_txt.h"],
@@ -352,6 +372,7 @@ cc_library(
         ":platform",
         ":xla_he_backend",
         ":xla_aluminum_shark_device",
+        ":e2dm_layout",
         "//tensorflow/core/platform:stream_executor_no_cuda",
     ],
     alwayslink = 1,

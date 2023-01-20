@@ -152,6 +152,13 @@ void* aluminum_shark_CreateContextCKKS(size_t poly_modulus_degree,
 // TODO: add support for this
 void* aluminum_shark_CreateContextTFHE(void* backend_ptr);
 
+// create a new CKKS context using the dynamic argument API.
+// accpets an array of aluminum_shark::Argument* containing count elements
+//
+// Returns (void*)aluminum_shark_Context*
+void* aluminum_shark_CreateContextCKKS_dynamic(aluminum_shark_Argument* args,
+                                               int count, void* backend_ptr);
+
 // create keys. takes a `aluminum_shark_Context*` which will hold a reference to
 // the key
 void aluminum_shark_CreatePublicKey(void* context_ptr);

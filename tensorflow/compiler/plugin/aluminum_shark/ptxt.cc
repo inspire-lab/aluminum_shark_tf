@@ -7,12 +7,20 @@ namespace aluminum_shark {
 
 // constructors
 
+Ptxt::Ptxt(const xla::Literal& l)
+    : literal_(l), shape_{xla_shape_to_shark_shape(literal_.shape())} {}
+
 Ptxt::Ptxt(const xla::Literal& l, std::string name)
-    : literal_(l), name_(name) {}
+    : literal_(l),
+      name_(name),
+      shape_{xla_shape_to_shark_shape(literal_.shape())} {}
 
 Ptxt::Ptxt(const xla::Literal& l, std::shared_ptr<Layout> layout,
            std::string name)
-    : BaseTxt(layout), literal_(l), name_(name) {}
+    : BaseTxt(layout),
+      literal_(l),
+      name_(name),
+      shape_{xla_shape_to_shark_shape(literal_.shape())} {}
 
 // create a deep copy which also creates a copy of stored object
 Ptxt Ptxt::deepCopy() const {
@@ -139,6 +147,13 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
   //       "unsopported scheme encountered in updating plaintext layout");
   // }
   // layout_ = layout;
+}
+
+const Shape& Ptxt::shape() const {
+  if (layout_) {
+    return BaseTxt::shape();
+  }
+  return shape_;
 }
 
 std::shared_ptr<BaseTxt> Ptxt::operator+(const BaseTxt& other) const {

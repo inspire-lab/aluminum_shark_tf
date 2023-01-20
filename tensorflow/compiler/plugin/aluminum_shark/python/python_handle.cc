@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 
+#include "tensorflow/compiler/plugin/aluminum_shark/python/arg_utils.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 // #include <mutex>
 
@@ -206,6 +207,25 @@ void* aluminum_shark_CreateContextTFHE(void* backend_ptr) {
   AS_LOG("TFHE backend not implemented");
   return nullptr;
 };
+
+void* aluminum_shark_CreateContextCKKS_dynamic(aluminum_shark_Argument* args,
+                                               int count, void* backend_ptr) {
+  AS_LOG_INFO << "creating CKKS backend" << std::endl;
+  std::vector<aluminum_shark_Argument> arguments;
+  aluminum_shark_Argument** arrrrgs =
+      reinterpret_cast<aluminum_shark_Argument**>(args);
+  for (size_t i = 0; i < count; i++) {
+    AS_LOG_INFO << aluminum_shark::arg_to_string(*arrrrgs[i]) << std::endl;
+    arguments.push_back(*arrrrgs[i]);
+  }
+
+  auto backend = static_cast<aluminum_shark_HEBackend*>(backend_ptr)->backend;
+  aluminum_shark_Context* ret = new aluminum_shark_Context();
+  ret->context = std::shared_ptr<aluminum_shark::HEContext>(
+      backend->createContextCKKS(arguments));
+  context_map[ret->context.get()] = ret;
+  return ret;
+}
 
 // Key Managment
 

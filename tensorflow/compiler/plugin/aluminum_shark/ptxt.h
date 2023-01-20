@@ -19,7 +19,7 @@ namespace aluminum_shark {
 class Ptxt : public BaseTxt {
  public:
   // Ctor/Dtor
-  Ptxt(const xla::Literal& l) : literal_(l){};
+  Ptxt(const xla::Literal& l);
   // Ptxt(const Ptxt& other) = default;
   // Ptxt(Ptxt&& other) = default;
   Ptxt(const xla::Literal& l, std::string name);
@@ -34,6 +34,7 @@ class Ptxt : public BaseTxt {
   const std::string& getName() const;
   void setName(const std::string& name);
 
+  virtual const Shape& shape() const override;
   const xla::Literal& literal() const { return literal_; };
   // void literal(xla::Literal& l) { literal_ = l; };
 
@@ -78,6 +79,7 @@ class Ptxt : public BaseTxt {
   std::string name_;
   HEContext* context_;
   const xla::Literal& literal_;
+  Shape shape_;  // use it when layout is present
 };
 
 // convert literal into Ptxt
