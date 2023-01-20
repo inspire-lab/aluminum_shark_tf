@@ -563,8 +563,6 @@ Status ExecutorState<PropagatorStateType>::ProcessSync(
   OpKernelContext ctx(params, item.num_outputs);
   nodestats::SetOpStart(stats);
 
-  std::cout << "ExecutorState<PropagatorStateType>::ProcessSync" << std::endl;
-
   OpKernel* op_kernel = item.kernel;
   Device* device = immutable_state_.params().device;
   const bool is_expensive = kernel_stats_->IsExpensive(item);
