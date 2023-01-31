@@ -247,6 +247,9 @@ void aluminum_shark_EnableLogging(bool on);
 // sets the log level
 void aluminum_shark_SetLogLevel(int level);
 
+// sets the backend log level
+void aluminum_shark_SetBackendLogLevel(int level, void* backend_ptr);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

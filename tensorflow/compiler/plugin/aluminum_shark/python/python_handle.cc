@@ -436,4 +436,11 @@ void aluminum_shark_SetLogLevel(int level) {
   aluminum_shark::set_log_level(level);
 }
 
+// sets the log level
+void aluminum_shark_SetBackendLogLevel(int level, void* backend_ptr) {
+  std::shared_ptr<aluminum_shark::HEBackend> backend =
+      static_cast<aluminum_shark_HEBackend*>(backend_ptr)->backend;
+  backend->set_log_level(level);
+}
+
 }  // extern "C"

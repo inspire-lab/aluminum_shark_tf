@@ -69,6 +69,8 @@ class HEBackend {
   virtual const std::string& to_string() = 0;
   virtual const API_VERSION& api_version() = 0;
 
+  virtual void set_log_level(int level) = 0;
+
  private:
   std::shared_ptr<void> lib_handle_;
   friend std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path);
