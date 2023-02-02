@@ -765,6 +765,29 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     return HandleMinimum<ElementwiseT>(minimum);
   }
 
+  template <
+      typename NativeT,
+      typename std::enable_if<is_complex_t<NativeT>::value>::type* = nullptr>
+  long GetExponent(HloInstruction* power) {
+    const auto* rhs = power->operand(1);
+    const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
+    AS_LOG_WARNING
+        << "Computing power with complex exponent is reduced to real part"
+        << std::endl;
+    auto value = rhs_literal.GetFirstElement<NativeT>();
+    return static_cast<long>(value.real());
+  }
+
+  template <
+      typename NativeT,
+      typename std::enable_if<!is_complex_t<NativeT>::value>::type* = nullptr>
+  long GetExponent(HloInstruction* power) {
+    const auto* rhs = power->operand(1);
+    const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
+    auto value = rhs_literal.GetFirstElement<NativeT>();
+    return static_cast<long>(value);
+  }
+
   Status HandlePower(HloInstruction* power) override {
     TF_ASSIGN_OR_RETURN(
         parent_->evaluated_[power],
@@ -774,6 +797,74 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                          ? static_cast<ElementwiseT>(1)
                          : std::pow(lhs_el, rhs_el);
             }));
+
+    auto power_func = [](::aluminum_shark::Ctxt& base, long exp) {
+      // check if exp is power of 2
+      bool is_power_of_two = 0 == (exp & (exp - 1));
+
+      AS_LOG_DEBUG << "computing x^" << exp << std::endl;
+
+      int count = 0;
+      if (is_power_of_two) {
+        for (;;) {
+          ++count;
+          AS_LOG_DEBUG << "x^" << exp << " iteration: " << count << std::endl;
+          base *= base;
+          exp >>= 1;
+          if (exp == 1) {
+            break;
+          }
+        }
+        return base;
+      } else {
+        ::aluminum_shark::Ctxt result;
+        bool first = true;
+        for (;;) {
+          ++count;
+          AS_LOG_DEBUG << "x^" << exp << " iteration: " << count << std::endl;
+          if (exp & 1) {
+            if (first) {
+              first = false;
+              result = base.deepCopy();
+            } else {
+              result *= base;
+            }
+          }
+          exp >>= 1;
+          if (!exp) {
+            break;
+          }
+          base *= base;
+        }
+        base = result;
+        return base;
+      }
+      AS_LOG_DEBUG << "computed x^" << exp << " in " << count << " iterations"
+                   << std::endl;
+    };
+
+    const auto* lhs = power->operand(0);
+    const auto* rhs = power->operand(1);
+
+    const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
+    ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
+    // ciphertext involved. return
+    if (!lhs_ctxt) {
+      return Status::OK();
+    }
+
+    AS_LOG_WARNING
+        << "using simpliefied power. it only supports one integer as "
+           "exponenent for the entire tensor. real values will be truncated"
+        << std::endl;
+    long exp = GetExponent<ReturnT>(power);
+
+    if (parent_->inplace(power)) {
+      parent_->evaluated_ctxt_[power] = power_func(*lhs_ctxt, exp);
+    } else {
+      ::aluminum_shark::Ctxt result = lhs_ctxt->deepCopy();
+      parent_->evaluated_ctxt_[power] = power_func(result, exp);
+    }
     return Status::OK();
   }
 
