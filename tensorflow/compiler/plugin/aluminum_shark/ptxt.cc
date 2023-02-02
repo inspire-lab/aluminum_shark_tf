@@ -74,7 +74,7 @@ void Ptxt::updateLayout(LAYOUT_TYPE layout_type, const HEContext* context) {
 void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
                         const HEContext* context) {
   updateLayout(layout);
-  AS_LOG_INFO << "Clearing ciphertexts " << std::endl;
+  AS_LOG_INFO << "Clearing ptxts " << std::endl;
   value_.clear();
   AS_LOG_INFO << "Checking scheme type " << std::endl;
   AS_LOG_INFO << "scheme type is " << context->scheme() << std::endl;
@@ -103,6 +103,7 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
     AS_LOG_CRITICAL << "unexpected scheme type" << std::endl;
     throw std::runtime_error("unexpected scheme type");
   }
+  AS_LOG_DEBUG << "Plaintext layedout" << std::endl;
 }
 
 void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {

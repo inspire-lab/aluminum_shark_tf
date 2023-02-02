@@ -175,7 +175,7 @@ AluminumSharkCompiler::ShapeSizeBytesFunction() const {
 
 std::unordered_set<const HloInstruction*> AluminumSharkCompiler::FindInplaceOps(
     HloModule* module) {
-  AS_LOG_DEBUG << "finding inplace operations" << std::endl;
+  AS_LOG_INFO << "finding inplace operations" << std::endl;
   // check for operations that can be done inplace
   HloInstruction* root = module->entry_computation()->root_instruction();
 
@@ -232,12 +232,12 @@ std::unordered_set<const HloInstruction*> AluminumSharkCompiler::FindInplaceOps(
   }
 
   // logging
-  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
-    AS_LOG_DEBUG << "possible inplace ops: " << std::endl;
+  if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
+    AS_LOG_INFO << "possible inplace ops: " << std::endl;
     for (const auto node : inplace_ops) {
       AS_LOG_SA << "\t" << node->name() << std::endl;
     }
-    AS_LOG_DEBUG << "op use counts: " << std::endl;
+    AS_LOG_INFO << "op use counts: " << std::endl;
     for (auto iter : op_use_count) {
       AS_LOG_SA << "\t" << iter.first->name() << ": " << iter.second
                 << std::endl;

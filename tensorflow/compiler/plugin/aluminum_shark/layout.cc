@@ -781,6 +781,7 @@ void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
+  AS_LOG_INFO << "Ctxt *= Ctxt" << std::endl;
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
@@ -803,6 +804,7 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
+  AS_LOG_INFO << "Ctxt += Ptxt" << std::endl;
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
   const auto& two_v = copy.getValue();
@@ -819,24 +821,23 @@ void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
   auto func = [&one_v, &two_v](size_t i) {
     one_v[i]->addInPlace(two_v[i].get());
   };
+  AS_LOG_INFO << "running parallel inplace addition" << std::endl;
   run_parallel(0, one_v.size(), func);
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
+  AS_LOG_INFO << "Ctxt *= Ptxt" << std::endl;
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
   const auto& two_v = copy.getValue();
   auto& one_v = one.getValue();
   if (one_v.size() != two_v.size()) {
-    AS_LOG_S << "incompatbile shapes: ";
-    stream_vector(one.shape());
-    AS_LOG_SA << " and ";
-    stream_vector(two.shape());
-    AS_LOG_SA << std::endl;
+    AS_LOG_CRITICAL << "incompatbile shapes: " << one.shape() << " and "
+                    << two.shape() << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
   for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->multInPlace(copy.getValue()[i].get());
+    one_v[i]->multInPlace(two_v[i].get());
   }
 }
 
