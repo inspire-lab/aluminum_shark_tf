@@ -5,6 +5,7 @@
 
 #include "absl/memory/memory.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ctxt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/division_replacer.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/executable.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/hlo_evaluator.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
@@ -82,6 +83,7 @@ Status AluminumSharkCompiler::RunHloOptimization(HloModule* hlo_module) {
       /*rewrite_training_op=*/false,
       /*rewrite_inference_op=*/true,
       /*rewrite_grad_op=*/false);
+  pipeline.AddPass<DivisionReplacer>();
   pipeline.AddPass<LayoutAssignment>(
       hlo_module->mutable_entry_computation_layout());
 

@@ -113,11 +113,28 @@ cc_library(
 )
 
 cc_library(
+    name = "division_replacer",
+    srcs = ["division_replacer.cc"],
+    hdrs = ["division_replacer.h"],
+    deps = [
+        ":logging",
+        "//tensorflow/compiler/xla/service:op_expander_pass",
+    ],
+)
+
+#   'tensorflow/compiler/xla/client/xla_builder.h'
+#   'tensorflow/compiler/xla/client/padding.h'
+#   'tensorflow/compiler/xla/client/xla_computation.h'
+#   'tensorflow/compiler/xla/service/op_expander_pass.h'
+#   'tensorflow/compiler/plugin/aluminum_shark/logging.h'
+
+cc_library(
     name = "compiler",
     srcs = ["compiler.cc"],
     hdrs = ["compiler.h"],
     deps = [
         ":ctxt",
+        ":division_replacer",
         ":executable",
         ":logging",
         ":platform_id",
