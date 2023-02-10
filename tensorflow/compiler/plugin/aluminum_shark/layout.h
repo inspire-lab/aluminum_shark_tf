@@ -168,20 +168,11 @@ class Layout {
   virtual void add_in_place(Ctxt& one, const Ptxt& two) const = 0;
   virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const = 0;
 
-  virtual void add_in_place(Ptxt& one, const Ptxt& two) const = 0;
-  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const = 0;
-
   virtual void add_in_place(Ctxt& one, long two) const = 0;
   virtual void multiply_in_place(Ctxt& one, long two) const = 0;
 
   virtual void add_in_place(Ctxt& one, double two) const = 0;
   virtual void multiply_in_place(Ctxt& one, double two) const = 0;
-
-  virtual void add_in_place(Ptxt& one, long two) const = 0;
-  virtual void multiply_in_place(Ptxt& one, long two) const = 0;
-
-  virtual void add_in_place(Ptxt& one, double two) const = 0;
-  virtual void multiply_in_place(Ptxt& one, double two) const = 0;
 
   // matrix and vector operations
 
@@ -199,8 +190,6 @@ class Layout {
 
 // others
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                         absl::Span<const int64_t> dimensions) const = 0;
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const = 0;
@@ -233,20 +222,11 @@ class SimpleLayout : public Layout {
   virtual void add_in_place(Ctxt& one, const Ptxt& two) const override;
   virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const override;
 
-  virtual void add_in_place(Ptxt& one, const Ptxt& two) const override;
-  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const override;
-
   virtual void add_in_place(Ctxt& one, long two) const override;
   virtual void multiply_in_place(Ctxt& one, long two) const override;
 
   virtual void add_in_place(Ctxt& one, double two) const override;
   virtual void multiply_in_place(Ctxt& one, double two) const override;
-
-  virtual void add_in_place(Ptxt& one, long two) const override;
-  virtual void multiply_in_place(Ptxt& one, long two) const override;
-
-  virtual void add_in_place(Ptxt& one, double two) const override;
-  virtual void multiply_in_place(Ptxt& one, double two) const override;
 
   // matrix and vector operations
 
@@ -301,20 +281,11 @@ class BatchLayout : public Layout {
   virtual void add_in_place(Ctxt& one, const Ptxt& two) const override;
   virtual void multiply_in_place(Ctxt& one, const Ptxt& two) const override;
 
-  virtual void add_in_place(Ptxt& one, const Ptxt& two) const override;
-  virtual void multiply_in_place(Ptxt& one, const Ptxt& two) const override;
-
   virtual void add_in_place(Ctxt& one, long two) const override;
   virtual void multiply_in_place(Ctxt& one, long two) const override;
 
   virtual void add_in_place(Ctxt& one, double two) const override;
   virtual void multiply_in_place(Ctxt& one, double two) const override;
-
-  virtual void add_in_place(Ptxt& one, long two) const override;
-  virtual void multiply_in_place(Ptxt& one, long two) const override;
-
-  virtual void add_in_place(Ptxt& one, double two) const override;
-  virtual void multiply_in_place(Ptxt& one, double two) const override;
 
   // matrix and vector operations
 
@@ -334,9 +305,6 @@ class BatchLayout : public Layout {
 
 // others
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                         absl::Span<const int64_t> dimensions) const override;
-
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
 #endif

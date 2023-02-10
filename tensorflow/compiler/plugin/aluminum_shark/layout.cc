@@ -171,19 +171,6 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
   }
 }
 
-void SimpleLayout::add_in_place(Ptxt& one, const Ptxt& two) const {
-  AS_LOG_WARNING << "deprecated function will be removed" << std::endl;
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->addInPlace(two.getValue()[i].get());
-  }
-}
-
-void SimpleLayout::multiply_in_place(Ptxt& one, const Ptxt& two) const {
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two.getValue()[i].get());
-  }
-}
-
 void SimpleLayout::add_in_place(Ctxt& one, long two) const {
   for (size_t i = 0; i < size_; ++i) {
     one.getValue()[i]->addInPlace(two);
@@ -203,30 +190,6 @@ void SimpleLayout::add_in_place(Ctxt& one, double two) const {
 }
 
 void SimpleLayout::multiply_in_place(Ctxt& one, double two) const {
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two);
-  }
-}
-
-void SimpleLayout::add_in_place(Ptxt& one, long two) const {
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->addInPlace(two);
-  }
-}
-
-void SimpleLayout::multiply_in_place(Ptxt& one, long two) const {
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two);
-  }
-}
-
-void SimpleLayout::add_in_place(Ptxt& one, double two) const {
-  for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->addInPlace(two);
-  }
-}
-
-void SimpleLayout::multiply_in_place(Ptxt& one, double two) const {
   for (size_t i = 0; i < size_; ++i) {
     one.getValue()[i]->multInPlace(two);
   }
@@ -841,40 +804,6 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
   }
 }
 
-void BatchLayout::add_in_place(Ptxt& one, const Ptxt& two) const {
-  AS_LOG_CRITICAL << "deprecated function " << std::endl;
-  throw std::runtime_error("deprecated function");
-  auto& one_v = one.getValue();
-  const auto& two_v = two.getValue();
-  if (one_v.size() != two_v.size()) {
-    AS_LOG_S << "incompatbile shapes: " << one.shape() << " and " << two.shape()
-             << ". lhs contains " << one_v.size() << " values and rhs contains "
-             << two_v.size() << "values" << std::endl;
-    throw std::runtime_error("incompatbile shapes");
-  }
-  for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->addInPlace(two.getValue()[i].get());
-  }
-}
-
-void BatchLayout::multiply_in_place(Ptxt& one, const Ptxt& two) const {
-  AS_LOG_CRITICAL << "deprecated function " << std::endl;
-  throw std::runtime_error("deprecated function");
-  auto& one_v = one.getValue();
-  const auto& two_v = two.getValue();
-  if (one_v.size() != two_v.size()) {
-    AS_LOG_S << "incompatbile shapes: ";
-    stream_vector(one.shape());
-    AS_LOG_SA << " and ";
-    stream_vector(two.shape());
-    AS_LOG_SA << std::endl;
-    throw std::runtime_error("incompatbile shapes");
-  }
-  for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->multInPlace(two.getValue()[i].get());
-  }
-}
-
 void BatchLayout::add_in_place(Ctxt& one, long two) const {
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->addInPlace(two);
@@ -894,30 +823,6 @@ void BatchLayout::add_in_place(Ctxt& one, double two) const {
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, double two) const {
-  for (size_t i = 0; i < axis_1_; ++i) {
-    one.getValue()[i]->multInPlace(two);
-  }
-}
-
-void BatchLayout::add_in_place(Ptxt& one, long two) const {
-  for (size_t i = 0; i < axis_1_; ++i) {
-    one.getValue()[i]->addInPlace(two);
-  }
-}
-
-void BatchLayout::multiply_in_place(Ptxt& one, long two) const {
-  for (size_t i = 0; i < axis_1_; ++i) {
-    one.getValue()[i]->multInPlace(two);
-  }
-}
-
-void BatchLayout::add_in_place(Ptxt& one, double two) const {
-  for (size_t i = 0; i < axis_1_; ++i) {
-    one.getValue()[i]->addInPlace(two);
-  }
-}
-
-void BatchLayout::multiply_in_place(Ptxt& one, double two) const {
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->multInPlace(two);
   }
