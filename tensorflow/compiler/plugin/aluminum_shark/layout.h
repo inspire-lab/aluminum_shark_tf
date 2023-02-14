@@ -197,6 +197,9 @@ class Layout {
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const = 0;
 
+  virtual Ctxt pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                   const xla::Shape& new_shape, double pad_value) const;
+
  protected:
   Shape shape_;
   size_t size_;  // number of total elements
@@ -245,14 +248,16 @@ class SimpleLayout : public Layout {
 
 // others
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-  virtual Ptxt broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                         absl::Span<const int64_t> dimensions) const override;
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
 #endif
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const override;
+
+  virtual Ctxt pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                   const xla::Shape& new_shape,
+                   double pad_value) const override;
 
  private:
   template <class T, class U>
@@ -310,6 +315,10 @@ class BatchLayout : public Layout {
 #endif
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const;
+
+  virtual Ctxt pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                   const xla::Shape& new_shape,
+                   double pad_value) const override;
 
  private:
   template <class T, class U>

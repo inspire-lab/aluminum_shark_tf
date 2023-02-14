@@ -89,6 +89,13 @@ Layout::Layout(const Shape& shape) : shape_(shape) {
   AS_LOG_S << "nubmer of indices " << size_ << std::endl;
 }
 
+Ctxt Layout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                 const xla::Shape& new_shape, double pad_value) const {
+  AS_LOG_CRITICAL << "padding not implemented for"
+                  << layout_type_to_string(this->type()) << std::endl;
+  throw std::runtime_error("not implemented");
+}
+
 // Simple Layout
 
 void SimpleLayout::init() {
@@ -377,72 +384,6 @@ Ctxt SimpleLayout::mat_mult_general_internal(const Ctxt& one,
 
 // others
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-Ptxt SimpleLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                             absl::Span<const int64_t> dimensions) const {
-  AS_LOG_CRITICAL << "broadcasting should be handled by tensorflow"
-                  << std::endl;
-  throw std::runtime_error("broadcasting needs to be done by tensorflow");
-  // AS_LOG_S << "broadcasting from shape: ";
-  // if (log()) {
-  //   stream_vector(ptxt.shape());
-  // }
-  // AS_LOG_SA << " to shape ";
-  // if (log()) {
-  //   stream_vector(result_shape);
-  // }
-  // AS_LOG_SA << "; dimensions : { ";
-  // for (const auto i : dimensions) {
-  //   AS_LOG_SA << i << ", ";
-  // }
-  // AS_LOG_SA << " }" << std::endl;
-
-  // // create reusult objecst
-  // std::shared_ptr<Layout> result_layout(
-  //     createLayout(LAYOUT_TYPE::SIMPLE, result_shape));
-  // const std::vector<std::shared_ptr<HEPtxt>> ptxt_v = ptxt.getValue();
-  // std::vector<std::shared_ptr<HEPtxt>> result_ptxts(result_layout->size());
-  // // we'll iterate over this
-  // AS_LOG_S << "broadcasting " << std::endl;
-  // auto broadcast_dim = dimensions[0];
-
-  // // this is pretty much a copy of xla::Literl::Broadcast. just made some
-  // // modificitons that fit our purposes
-
-  // // first we need to make some conversion
-  // // TODO RP: converting the shapes back and forth between xla shapes and
-  // // aluminum_shark shapes should be addressed at some point
-  // xla::Shape xla_shape = create_xla_dummy_shape(ptxt.shape());
-  // xla::Shape xla_result_shape = create_xla_dummy_shape(result_shape);
-
-  // // scratch_source_index is temporary storage space for the computed index
-  // // into the input literal.  We put it here to avoid allocating an
-  // // std::vector in every iteration of ShapeUtil::ForEachIndex.
-  // std::vector<int64_t> scratch_source_index(xla_shape.dimensions_size());
-
-  // xla::ShapeUtil::ForEachIndex(
-  //     xla_result_shape, [&](absl::Span<const int64_t> output_index) {
-  //       for (int64_t i = 0, end = dimensions.size(); i < end; ++i) {
-  //         scratch_source_index[i] = output_index[dimensions[i]];
-  //       }
-  //       int64_t dest_index =
-  //       xla::IndexUtil::MultidimensionalIndexToLinearIndex(
-  //           xla_result_shape, output_index);
-  //       int64_t source_index =
-  //           xla::IndexUtil::MultidimensionalIndexToLinearIndex(
-  //               xla_shape, scratch_source_index);
-  //       // memcpy(dest_data + primitive_size * dest_index,
-  //       //        source_data + primitive_size * source_index,
-  //       primitive_size);
-  //       // this where the acutall broadcasting happens
-  //       AS_LOG_DEBUG << "copying from " << source_index << " to " <<
-  //       dest_index
-  //                    << std::endl;
-  //       result_ptxts[dest_index] = ptxt_v[source_index];
-  //       return true;
-  //     });
-
-  // return Ptxt(result_ptxts, result_layout, ptxt.getName() + " broadcast");
-}
 
 Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                                xla::HloInstruction* hlo) const {
@@ -682,6 +623,70 @@ Ctxt SimpleLayout::reshape(Ctxt& lhs, const Shape& shape) const {
   return lhs;
 };
 
+Ctxt SimpleLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                       const xla::Shape& new_shape, double pad_value) const {
+  // compute size of the new shape
+  int64_t size = 1;
+  for (const auto& dim : new_shape.dimensions()) {
+    size *= dim;
+  }
+  // create return vector and fill it with nullpointers
+  std::vector<std::shared_ptr<HECtxt>> res_vec(size, std::shared_ptr<HECtxt>());
+
+  // copy over the values we need
+  std::vector<int64_t> input_index(lhs.shape().size(), 0);
+  std::vector<int64_t> target_index(new_shape.rank(), 0);
+
+  auto shark_shape = xla_shape_to_shark_shape(new_shape);
+
+  // Loop through each element of the operand, assign them to the
+  // corresponding index of the resulting padded literal.
+  auto func = [&](absl::Span<const int64_t> input_index) {
+    for (auto i = 0; i < input_index.size(); ++i) {
+      // Interior padding occurs logically before edge padding, so in the
+      // case of negative edge padding elements are removed from the
+      // interior-padded operand.
+      target_index[i] =
+          pad_config.dimensions(i).edge_padding_low() +
+          input_index[i] * (pad_config.dimensions(i).interior_padding() + 1);
+
+      // Account for negative low and high padding: skip assignment if the
+      // any target index is out of range.
+      if (!(target_index[i] >= 0 &&
+            target_index[i] < new_shape.dimensions(i))) {
+        return true;
+      }
+    }
+    // flat indices
+    size_t target_index_f = multi_index_to_flat(target_index, shark_shape);
+    size_t input_index_f = multi_index_to_flat(input_index, lhs.shape());
+    res_vec[target_index_f] =
+        std::shared_ptr<HECtxt>(lhs.getValue()[input_index_f]->deepCopy());
+    return true;
+  };
+
+  std::vector<int64_t> zero_base(lhs.shape().size(), 0);
+  std::vector<int64_t> step(lhs.shape().size(), 1);
+
+  auto xla_dummy_shape = create_xla_dummy_shape(lhs.shape());
+  xla::ShapeUtil::ForEachIndex(xla_dummy_shape, zero_base,
+                               xla::AsInt64Slice(xla_dummy_shape.dimensions()),
+                               step, func);
+
+  // now we need to replace all the null pointers
+  std::vector<double> pad_vec{pad_value};
+  for (size_t i = 0; res_vec.size(); ++i) {
+    if (!res_vec[i]) {
+      res_vec[i] = std::shared_ptr<HECtxt>(
+          lhs.getContext()->encrypt(pad_vec, "padding"));
+    }
+  }
+  // create and return padded ciphertext
+  std::shared_ptr<Layout> layout =
+      std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE, shark_shape));
+  return Ctxt(res_vec, layout, "padded ctxt");
+}
+
 // template instantiation
 template Ctxt SimpleLayout::dot_internal<Ctxt, HECtxt>(const Ctxt& one,
                                                        const Ctxt& two) const;
@@ -853,11 +858,12 @@ Ctxt BatchLayout::dot(const Ctxt& lhs, const Ptxt& rhs) const {
 
 template <class T, class U>
 Ctxt BatchLayout::dot_internal(const Ctxt& one, const T& two) const {
-  // with the batchlayout and batch size b we treat the first dimension of the
-  // lhs arguement as 1 so any matrix of the lhs of shape (b x m) is treated as
-  // (1 x m). further a vector with n elements (shape (n)) is acutally a stack
-  // of b vectors of shape (n). while on the lhs elements are encoded in fewer
-  // ciphertexts the rhs we still need the full number of elements
+  // with the batchlayout and batch size b we treat the first dimension of
+  // the lhs arguement as 1 so any matrix of the lhs of shape (b x m) is
+  // treated as (1 x m). further a vector with n elements (shape (n)) is
+  // acutally a stack of b vectors of shape (n). while on the lhs elements
+  // are encoded in fewer ciphertexts the rhs we still need the full number
+  // of elements
 
   // shape checks
   // a dot prodcut between (b X n) and (n) in this layout is actually just
@@ -870,9 +876,9 @@ Ctxt BatchLayout::dot_internal(const Ctxt& one, const T& two) const {
   // check incompatible vector shapes
   if ((one.shape().size() == 2 &&
        one.shape()[1] !=
-           two.shape()[0])  // if we are dealing with batched inputs we need to
-                            // check the second dimensions of the lhs against
-                            // the 1st of the rhs
+           two.shape()[0])  // if we are dealing with batched inputs we need
+                            // to check the second dimensions of the lhs
+                            // against the 1st of the rhs
       || one.shape()[0] != two.shape()[0]) {
     AS_LOG_S << "invalid shapes for dot product: ";
     if (log()) {
@@ -920,8 +926,8 @@ Ctxt BatchLayout::dot_internal(const Ctxt& one, const T& two) const {
 template <class T, class U>
 Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   // shape checks
-  // this only works for iif we have 2 dimensionals matrices and the number of
-  // clumones in one is equal to the number of rows in two
+  // this only works for iif we have 2 dimensionals matrices and the number
+  // of clumones in one is equal to the number of rows in two
   AS_LOG_INFO << "shapes for mat mult: " << one.shape() << ", " << two.shape()
               << std::endl;
   if (one.shape().size() != 2 || two.shape().size() != 2 ||
@@ -953,7 +959,8 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
     std::vector<size_t> rhs_index(2, 0);
     lhs_index[0] = row;
     rhs_index[1] = col;
-    // iteration bound. we could either use lhs_shape[1] or rhs_shape[0] here
+    // iteration bound. we could either use lhs_shape[1] or rhs_shape[0]
+    // here
     size_t n_iter = lhs_shape[1];
 
     HECtxt* result = nullptr;
@@ -1122,46 +1129,6 @@ Ctxt BatchLayout::mat_mult_general(const Ctxt& one, const Ptxt& two) const {
 
 // others
 #ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-Ptxt BatchLayout::broadcast(const Ptxt& ptxt, const Shape& result_shape,
-                            absl::Span<const int64_t> dimensions) const {
-  AS_LOG_CRITICAL << "do broadcasting on ptxt" << std::endl;
-  throw std::runtime_error("do broadcasting on ptxt");
-
-  // AS_LOG_S << "brodcasting with batch layout, from " <<
-  // ShapePrint(ptxt.shape())
-  //          << " to " << ShapePrint(result_shape) << ", dimensions: "
-  //          << std::vector<int64_t>(dimensions.begin(), dimensions.end())
-  //          << std::endl;
-  // // there is a special case where brodacast an array along the batch
-  // // dimension. this is free since with the batchlayout this is what we
-  // // already have. just update the layout to reflect the internal shape
-  // if (result_shape.size() == ptxt.shape().size() + 1) {
-  //   bool broadcast_batch = true;
-  //   const auto& ptxt_shape = ptxt.shape();
-  //   for (size_t i = 0; i < ptxt_shape.size() && broadcast_batch; i++) {
-  //     broadcast_batch = result_shape[i + 1] == ptxt_shape[i];
-  //   }
-  //   if (broadcast_batch) {
-  //     AS_LOG_S << "using fast broadcast along the batch dimension" <<
-  //     std::endl; std::shared_ptr<Layout> new_layout =
-  //     std::shared_ptr<Layout>(
-  //         createLayout(LAYOUT_TYPE::BATCH, result_shape));
-  //     Ptxt ret(ptxt.getValue(), new_layout, "broadcast " + ptxt.getName());
-  //     AS_LOG_S << "broadcasted: \n"
-  //              << ptxt.decodeDouble() << "to \n"
-  //              << ret.decodeDouble() << std::endl;
-  //     return ret;
-  //   }
-  // }
-
-  // creating a non const copy and update the layout
-  // Ptxt copy = ptxt.deepCopy();
-  // AS_LOG_S << "updating Layout " << std::endl;
-  // copy.updateLayout(
-  //     std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::SIMPLE,
-  //     ptxt.shape())));
-  // return copy.layout().broadcast(copy, result_shape, dimensions);
-}
 
 Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                               xla::HloInstruction* hlo) const {
@@ -1172,8 +1139,8 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   // this is an adapted copy of
   // xla::HloEvaluatorTypedVisitor::ConvolutionWithLiterals
   const auto& window = hlo->window();
-  // we need to "fake out" the system by creating fake shapes where the batch
-  // dimension is 1, for both the lhs and the result
+  // we need to "fake out" the system by creating fake shapes where the
+  // batch dimension is 1, for both the lhs and the result
   AS_LOG_INFO << "creating shapes " << std::endl;
   Shape temp = xla_shape_to_shark_shape(hlo->shape());
   temp[0] = 1;
@@ -1245,8 +1212,8 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
 
     const int64_t output_z_size =
         xla::ShapeUtil::GetDimension(rhs_shape, kernel_output_z_dim);
-    // The output feature dimension is a concatenation of convolution results
-    // from the different groups.
+    // The output feature dimension is a concatenation of convolution
+    // results from the different groups.
     const int64_t output_feature_group_size =
         output_z_size / feature_group_count;
 
@@ -1395,6 +1362,81 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   return Ctxt(ctxt_vector, std::shared_ptr<Layout>(layout),
               "conv(" + lhs.getName() + ")");
 }
+
+Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
+                      const xla::Shape& new_shape, double pad_value) const {
+  // compute size of the new shape
+  int64_t size = 1;
+  for (size_t i = 1; i < new_shape.dimensions().size(); i++) {
+    size *= new_shape.dimensions()[i];
+  }
+  // create return vector and fill it with nullpointers
+  std::vector<std::shared_ptr<HECtxt>> res_vec(size, std::shared_ptr<HECtxt>());
+
+  // copy over the values we need
+  std::vector<int64_t> input_index(lhs.shape().size(), 0);
+  std::vector<int64_t> target_index(new_shape.rank(), 0);
+
+  auto shark_shape = xla_shape_to_shark_shape(new_shape);
+
+  // create batched shapes
+  auto target_shape_batched = shark_shape;
+  target_shape_batched[0] = 1;
+  auto input_shape_batched = lhs.shape();
+  input_shape_batched[0] = 1;
+  // Loop through each element of the operand, assign them to the
+  // corresponding index of the resulting padded literal.
+  auto func = [&](absl::Span<const int64_t> input_index) {
+    for (auto i = 0; i < input_index.size(); ++i) {
+      // Interior padding occurs logically before edge padding, so in the
+      // case of negative edge padding elements are removed from the
+      // interior-padded operand.
+      target_index[i] =
+          pad_config.dimensions(i).edge_padding_low() +
+          input_index[i] * (pad_config.dimensions(i).interior_padding() + 1);
+
+      // Account for negative low and high padding: skip assignment if the
+      // any target index is out of range.
+      if (!(target_index[i] >= 0 &&
+            target_index[i] < new_shape.dimensions(i))) {
+        return true;
+      }
+    }
+    // flat indices
+    size_t target_index_f =
+        multi_index_to_flat(target_index, target_shape_batched);
+    size_t input_index_f =
+        multi_index_to_flat(input_index, input_shape_batched);
+    res_vec[target_index_f] =
+        std::shared_ptr<HECtxt>(lhs.getValue()[input_index_f]->deepCopy());
+    return true;
+  };
+
+  std::vector<int64_t> zero_base(lhs.shape().size(), 0);
+  std::vector<int64_t> step(lhs.shape().size(), 1);
+
+  // next we cheat a little by creating a shape that has a batch dim of 1
+  Shape temp_shape = lhs.shape();
+  temp_shape[0] = 1;
+  auto xla_dummy_shape = create_xla_dummy_shape(temp_shape);
+  xla::ShapeUtil::ForEachIndex(xla_dummy_shape, zero_base,
+                               xla::AsInt64Slice(xla_dummy_shape.dimensions()),
+                               step, func);
+
+  // now we need to replace all the null pointers
+  std::vector<double> pad_vec{pad_value};
+  for (size_t i = 0; res_vec.size(); ++i) {
+    if (!res_vec[i]) {
+      res_vec[i] = std::shared_ptr<HECtxt>(
+          lhs.getContext()->encrypt(pad_vec, "padding"));
+    }
+  }
+  // create and return padded ciphertext
+  auto layout =
+      std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::BATCH, shark_shape));
+  return Ctxt(res_vec, layout, "padded ctxt");
+}
+
 #endif
 
 Ctxt BatchLayout::reshape(Ctxt& lhs, const Shape& shape) const {
@@ -1405,8 +1447,8 @@ Ctxt BatchLayout::reshape(Ctxt& lhs, const Shape& shape) const {
         "can't reshape batch dimension. not implemented yet");
   }
   std::shared_ptr<Layout> layout(createLayout(LAYOUT_TYPE::BATCH, shape));
-  // AS_LOG_INFO << "reshaping from " << lhs.layout() << " to "  << *layout <<
-  // std::endl;
+  // AS_LOG_INFO << "reshaping from " << lhs.layout() << " to "  << *layout
+  // << std::endl;
   lhs.updateLayout(layout);
   AS_LOG_INFO << "reshaped to " << lhs.shape() << std::endl;
   return lhs;

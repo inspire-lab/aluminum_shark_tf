@@ -1787,6 +1787,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         << " but is inferred to be: "
         << ShapeUtil::HumanString(inferred_return_shape);
 
+    AS_LOG_INFO << "padding "
+                << ShapeUtil::HumanString(pad->operand(0)->shape()) << " to "
+                << pad->shape() << std::endl;
+
     // Create new HLO of padded shape with padding value.
     ReturnT scalar =
         parent_->GetEvaluatedLiteralFor(pad->operand(1)).Get<ReturnT>({});
@@ -1834,6 +1838,23 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         AsInt64Slice(evaluated_operand.shape().dimensions()), step, func);
 
     parent_->evaluated_[pad] = std::move(result);
+
+    // check if there is ciphertext that needs padding
+    auto* ctxt = parent_->GetEvaluatedCtxtFor(pad->operand(0));
+    if (ctxt) {
+      if (ctxt->shape()[0] == result.shape().dimensions(0)) {
+        AS_LOG_CRITICAL
+            << "padding in the batch dimension currently not supported"
+            << std::endl;
+        TF_RET_CHECK(ctxt->shape()[0] == result.shape().dimensions(0));
+      }
+      double pad_value = GetAsDouble<ReturnT>(
+          parent_->GetEvaluatedLiteralFor(pad->operand(1)), {});
+      auto result_ctxt =
+          ctxt->layout().pad(*ctxt, pad_config, result.shape(), pad_value);
+      parent_->evaluated_ctxt_[pad] = result_ctxt;
+    }
+
     return Status::OK();
   }
 
