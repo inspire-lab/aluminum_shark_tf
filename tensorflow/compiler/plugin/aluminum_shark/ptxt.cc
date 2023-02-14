@@ -190,31 +190,15 @@ std::shared_ptr<BaseTxt> Ptxt::operator*(const BaseTxt& other) const {
 }
 
 BaseTxt& Ptxt::operator+=(const BaseTxt& other) {
-  // if we made this far this needs to be a ptxt
-  try {
-    const Ptxt& ptxt = dynamic_cast<const Ptxt&>(other);
-    layout().add_in_place(*this, ptxt);
-    name_ += " + " + ptxt.getName();
-    return *this;
-  } catch (const std::bad_cast& e) {
-    // this is not ok
-    AS_LOG_S << e.what() << std::endl;
-    throw e;
-  }
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 BaseTxt& Ptxt::operator*=(const BaseTxt& other) {
-  // if we made this far this needs to be a ptxt
-  try {
-    const Ptxt& ptxt = dynamic_cast<const Ptxt&>(other);
-    layout().multiply_in_place(*this, ptxt);
-    name_ += " + " + ptxt.getName();
-    return *this;
-  } catch (const std::bad_cast& e) {
-    // this is not ok
-    AS_LOG_S << e.what() << std::endl;
-    throw e;
-  }
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 // integer
@@ -235,15 +219,15 @@ std::shared_ptr<BaseTxt> Ptxt::operator*(long other) {
 }
 
 Ptxt& Ptxt::operator+=(long other) {
-  layout().add_in_place(*this, other);
-  name_ += " + " + std::to_string(other);
-  return *this;
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 Ptxt& Ptxt::operator*=(long other) {
-  layout().multiply_in_place(*this, other);
-  name_ += " * " + std::to_string(other);
-  return *this;
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 // floating point
@@ -264,15 +248,15 @@ std::shared_ptr<BaseTxt> Ptxt::operator*(double other) {
 }
 
 Ptxt& Ptxt::operator+=(double other) {
-  layout().add_in_place(*this, other);
-  name_ += " + " + std::to_string(other);
-  return *this;
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 Ptxt& Ptxt::operator*=(double other) {
-  layout().multiply_in_place(*this, other);
-  name_ += " * " + std::to_string(other);
-  return *this;
+  AS_LOG_CRITICAL << "there should not be any operations on plaintext"
+                  << std::endl;
+  throw std::runtime_error("there should not be any operations on plaintext");
 }
 
 // TODO RP: template this
