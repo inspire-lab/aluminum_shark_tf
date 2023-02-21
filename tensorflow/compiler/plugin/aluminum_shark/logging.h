@@ -30,7 +30,10 @@ void enable_logging(bool activate);
 bool log();
 bool log(int level);
 
+bool log_large_vectors();
+
 void set_log_level(int level);
+int get_log_level();
 
 void set_log_prefix(const std::string& prefix);
 const std::string& get_log_prefix();

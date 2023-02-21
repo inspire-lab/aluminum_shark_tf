@@ -45,7 +45,11 @@ bool log() { return log_on; }
 
 bool log(int level) { return level >= log_level; }
 
+// TODO:
+bool log_large_vectors() { return false; };
+
 void set_log_level(int level) { log_level = level; }
+int get_log_level() { return log_level; }
 
 void set_log_prefix(const std::string& prefix) { log_prefix = prefix; }
 
