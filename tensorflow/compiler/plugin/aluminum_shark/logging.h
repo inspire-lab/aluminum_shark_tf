@@ -59,36 +59,17 @@ constexpr int AS_DEBUG = 10;
 #define AS_LOG_SA \
   (::aluminum_shark::log() ? std::cout : ::aluminum_shark::nullstream())
 
-#define AS_LOG_CRITICAL                                                  \
-  (::aluminum_shark::log(::aluminum_shark::AS_CRITICAL)                  \
-       ? std::cout                                                       \
-       : ::aluminum_shark::nullstream())                                 \
-      << ::aluminum_shark::get_log_prefix() << " CRITICAL: " << __FILE__ \
-      << ":" << __LINE__ << "] "
-#define AS_LOG_ERROR                                                         \
-  (::aluminum_shark::log(::aluminum_shark::AS_ERROR)                         \
-       ? std::cout                                                           \
-       : ::aluminum_shark::nullstream())                                     \
-      << ::aluminum_shark::get_log_prefix() << " ERROR: " << __FILE__ << ":" \
-      << __LINE__ << "] "
-#define AS_LOG_WARNING                                                         \
-  (::aluminum_shark::log(::aluminum_shark::AS_WARNING)                         \
-       ? std::cout                                                             \
-       : ::aluminum_shark::nullstream())                                       \
-      << ::aluminum_shark::get_log_prefix() << " WARNING: " << __FILE__ << ":" \
-      << __LINE__ << "] "
-#define AS_LOG_INFO                                                         \
-  (::aluminum_shark::log(::aluminum_shark::AS_INFO)                         \
-       ? std::cout                                                          \
-       : ::aluminum_shark::nullstream())                                    \
-      << ::aluminum_shark::get_log_prefix() << " INFO: " << __FILE__ << ":" \
-      << __LINE__ << "] "
-#define AS_LOG_DEBUG                                                         \
-  (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)                         \
-       ? std::cout                                                           \
-       : ::aluminum_shark::nullstream())                                     \
-      << ::aluminum_shark::get_log_prefix() << " DEBUG: " << __FILE__ << ":" \
-      << __LINE__ << "] "
+#define AS_LOG_MACRO(level, lvl_prefix)                                       \
+  if (!::aluminum_shark::log(level)) {                                        \
+  } else                                                                      \
+    std::cout << ::aluminum_shark::get_log_prefix() << " " lvl_prefix << ": " \
+              << __FILE__ << ":" << __LINE__ << "] "
+
+#define AS_LOG_CRITICAL AS_LOG_MACRO(::aluminum_shark::AS_CRITICAL, "CRITICAL")
+#define AS_LOG_ERROR AS_LOG_MACRO(::aluminum_shark::AS_ERROR, "ERROR")
+#define AS_LOG_WARNING AS_LOG_MACRO(::aluminum_shark::AS_WARNING, "WARNING")
+#define AS_LOG_INFO AS_LOG_MACRO(::aluminum_shark::AS_INFO, "INFO")
+#define AS_LOG_DEBUG AS_LOG_MACRO(::aluminum_shark::AS_DEBUG, "DEBUG")
 
 #endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LOGGING_H \
         */
