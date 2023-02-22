@@ -13,12 +13,10 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 // removes all the depencies to tensorflow, xla and absl. for testing. disables
 // all of functions
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 #include "absl/types/span.h"
 #include "tensorflow/compiler/xla/service/hlo_instructions.h"
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#endif
 
 // #define LAYOUT_DEBUG
 
@@ -97,6 +95,7 @@ class Layout {
 
   // const std::vector<size_t>& map(size_t i) { return indicies_[i]; };
   const Shape& shape() const { return shape_; };
+  xla::Shape shape_xla() const;
   const size_t size() const { return size_; };
 
   virtual std::pair<size_t, size_t> get_layout_index(size_t i) const = 0;
@@ -119,7 +118,8 @@ class Layout {
       const size_t idx_0 = idx.first;
       const size_t idx_1 = idx.second;
       // only lock if we actually need it
-      if (log(AS_DEBUG)) {
+      if (log(AS_DEBUG) &&
+          false) {  // currently disabled cause it takes forever
         std::unique_lock<std::mutex>(mu);
         AS_LOG_DEBUG << "i" << i << " -> " << idx_0 << " ," << idx_1
                      << std::endl;
@@ -161,6 +161,21 @@ class Layout {
     return this->type() == other.type();
   };
 
+  // accessing ctxt data
+  // returns the actual shape of the underlying buffer
+  virtual Shape get_physical_shape() const = 0;
+  // returns the actual shape of the underlying buffer as an xla::Shape
+  virtual xla::Shape get_physical_shape_xla() const;
+
+  virtual std::shared_ptr<HECtxt> get(absl::Span<const int64_t> index,
+                                      Ctxt& ctxt) const;
+  virtual std::shared_ptr<HECtxt> get(size_t index, Ctxt& ctxt) const;
+
+  virtual void set(absl::Span<const int64_t> index, Ctxt& ctxt,
+                   std::shared_ptr<HECtxt> value) const;
+  virtual void set(size_t index, Ctxt& ctxt,
+                   std::shared_ptr<HECtxt> value) const;
+
   // Operation Interface
   virtual void add_in_place(Ctxt& one, const Ctxt& two) const = 0;
   virtual void multiply_in_place(Ctxt& one, const Ctxt& two) const = 0;
@@ -188,12 +203,10 @@ class Layout {
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const = 0;
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ptxt& two) const = 0;
 
-// others
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
+  // others
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const = 0;
-#endif
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const = 0;
 
@@ -217,6 +230,10 @@ class SimpleLayout : public Layout {
 
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
+
+  // accessing ctxt data
+  // returns the actual shape of the underlying buffer
+  virtual Shape get_physical_shape() const override;
 
   // Operation Interface
   virtual void add_in_place(Ctxt& one, const Ctxt& two) const override;
@@ -246,12 +263,9 @@ class SimpleLayout : public Layout {
                                 const Ptxt& two) const override;
   virtual Ctxt mat_mult_general(const Ctxt& one, const Ctxt& two) const;
 
-// others
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-
+  // others
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
-#endif
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const override;
 
@@ -278,6 +292,10 @@ class BatchLayout : public Layout {
   virtual std::pair<size_t, size_t> get_layout_index(size_t i) const;
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
+
+  // accessing ctxt data
+  // returns the actual shape of the underlying buffer
+  virtual Shape get_physical_shape() const override;
 
   // Operation Interface
   virtual void add_in_place(Ctxt& one, const Ctxt& two) const override;
@@ -308,11 +326,10 @@ class BatchLayout : public Layout {
   virtual Ctxt mat_mult_general(const Ctxt& one,
                                 const Ptxt& two) const override;
 
-// others
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
+  // others
+
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
-#endif
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const;
 
@@ -332,13 +349,12 @@ Layout* createLayout(const char* type, const Shape& shape);
 
 Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape);
 
-// helper functions
+Layout* createLayout(const LAYOUT_TYPE type, const xla::Shape& shape);
 
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
+// helper functions
 xla::Shape create_xla_dummy_shape(const Shape& shape);
 
 Shape xla_shape_to_shark_shape(const xla::Shape& shape);
-#endif
 
 // helper function that computes low level dot products.
 // one and tow should be std::pair that hold the start and
@@ -390,6 +406,15 @@ void registerLayout(LAYOUT_TYPE type,
                     std::function<Layout*(const Shape& shape)> factory);
 
 std::ostream& operator<<(std::ostream& os, const Layout& layout);
+
+template <class T>
+size_t size_of_shape(const T& shape) {
+  size_t result = 1;
+  for (const auto& i : shape) {
+    result *= i;
+  }
+  return result;
+}
 
 }  //  namespace aluminum_shark
 

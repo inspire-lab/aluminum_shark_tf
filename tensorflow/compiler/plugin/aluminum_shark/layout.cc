@@ -12,11 +12,8 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/exception.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
-
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 #include "tensorflow/compiler/xla/index_util.h"
 #include "tensorflow/compiler/xla/shape_util.h"
-#endif
 
 namespace {
 #ifdef LAYOUT_DEBUG
@@ -66,7 +63,6 @@ const LAYOUT_TYPE string_to_layout_type(const char* name) {
 //   LI = i1 * M[1] + i2 * M[2] + ... + iN * M[N].
 //
 // This lets you calculate LI given the multidimensional indices in any order.
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 static xla::DimensionVector MakeDimMultipliers(const xla::Shape& shape) {
   xla::DimensionVector v(shape.rank());
   int64_t scale = 1;
@@ -76,24 +72,101 @@ static xla::DimensionVector MakeDimMultipliers(const xla::Shape& shape) {
   }
   return v;
 }
-#endif
+
+// helper function
+bool check_index(absl::Span<const int64_t> index, const Shape& shape) {
+  if (index.size() != shape.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < shape.size(); i++) {
+    if (index[i] >= shape[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void check_index_and_fail(absl::Span<const int64_t> index, const Shape& shape) {
+  if (index.size() != shape.size()) {
+    AS_LOG_CRITICAL << "Incompatible index "
+                    << IterablePrintWrapper<absl::Span<const int64_t>>(index)
+                    << " and shape " << IterablePrintWrapper<Shape>(shape)
+                    << std::endl;
+    throw std::runtime_error("Invalid index");
+  }
+  for (size_t i = 0; i < shape.size(); i++) {
+    if (index[i] >= shape[i]) {
+      AS_LOG_CRITICAL << "index out of bounds at " << i << " for "
+                      << IterablePrintWrapper<absl::Span<const int64_t>>(index)
+                      << " and shape " << IterablePrintWrapper<Shape>(shape)
+                      << std::endl;
+    }
+  }
+}
 
 // Base
-
 Layout::Layout(const Shape& shape) : shape_(shape) {
   size_t size = 1;
   for (auto& i : shape) {
     size *= i;
   }
   size_ = size;
-  AS_LOG_S << "nubmer of indices " << size_ << std::endl;
+  AS_LOG_INFO << "nubmer of indices " << size_ << std::endl;
 }
 
 Ctxt Layout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
                  const xla::Shape& new_shape, double pad_value) const {
+  std::cout << "padding not implemented for"
+            << layout_type_to_string(this->type()) << std::endl;
   AS_LOG_CRITICAL << "padding not implemented for"
                   << layout_type_to_string(this->type()) << std::endl;
   throw std::runtime_error("not implemented");
+}
+
+xla::Shape Layout::shape_xla() const { return create_xla_dummy_shape(shape_); }
+
+xla::Shape Layout::get_physical_shape_xla() const {
+  return create_xla_dummy_shape(get_physical_shape());
+};
+
+std::shared_ptr<HECtxt> Layout::get(size_t index, Ctxt& ctxt) const {
+  return ctxt.getValue()[index];
+}
+
+std::shared_ptr<HECtxt> Layout::get(absl::Span<const int64_t> index,
+                                    Ctxt& ctxt) const {
+  if (!check_index(index, get_physical_shape())) {
+    AS_LOG_CRITICAL << "Incompatible index "
+                    << IterablePrintWrapper<absl::Span<const int64_t>>(index)
+                    << " and shape " << IterablePrintWrapper<Shape>(shape_)
+                    << " with phyiscal shape "
+                    << IterablePrintWrapper<Shape>(get_physical_shape())
+                    << std::endl;
+    throw std::runtime_error("Invalid index");
+  }
+  return get(multi_index_to_flat(index, get_physical_shape()), ctxt);
+}
+void Layout::set(absl::Span<const int64_t> index, Ctxt& ctxt,
+                 std::shared_ptr<HECtxt> value) const {
+  if (!check_index(index, get_physical_shape())) {
+    AS_LOG_CRITICAL << "Incompatible index "
+                    << IterablePrintWrapper<absl::Span<const int64_t>>(index)
+                    << " and shape " << IterablePrintWrapper<Shape>(shape_)
+                    << " with phyiscal shape "
+                    << IterablePrintWrapper<Shape>(get_physical_shape())
+                    << std::endl;
+    throw std::runtime_error("Invalid index");
+  }
+  AS_LOG_DEBUG << "Setting at ciphertext at "
+               << IterablePrintWrapper<absl::Span<const int64_t>>(index)
+               << std::endl;
+  set(multi_index_to_flat(index, get_physical_shape()), ctxt, value);
+}
+
+void Layout::set(size_t index, Ctxt& ctxt,
+                 std::shared_ptr<HECtxt> value) const {
+  AS_LOG_DEBUG << "Setting at ciphertext at " << index << std::endl;
+  ctxt.getValue()[index] = value;
 }
 
 // Simple Layout
@@ -114,6 +187,10 @@ Layout* SimpleLayout::deepCopy() const {
   AS_LOG_S << "creating deepcopy of SimpleLayout" << std::endl;
   return new SimpleLayout(*this);
 }
+
+// accessing ctxt data
+// returns the actual shape of the underlying buffer
+Shape SimpleLayout::get_physical_shape() const { return shape_; }
 
 // Operation Interface
 void SimpleLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
@@ -138,8 +215,8 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
-  // we can create a copy here that costs basically nothing two does not contain
-  // data (or at least shouldnt)
+  // we can create a copy here that costs basically nothing two does not
+  // contain data (or at least shouldnt)
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
   const auto& two_v = copy.getValue();
@@ -383,8 +460,6 @@ Ctxt SimpleLayout::mat_mult_general_internal(const Ctxt& one,
 }
 
 // others
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-
 Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                                xla::HloInstruction* hlo) const {
 #ifdef LAYOUT_DEBUG
@@ -612,7 +687,6 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
 
   return result;
 }
-#endif
 
 Ctxt SimpleLayout::reshape(Ctxt& lhs, const Shape& shape) const {
   std::shared_ptr<Layout> layout(createLayout(LAYOUT_TYPE::SIMPLE, shape));
@@ -730,6 +804,13 @@ std::pair<size_t, size_t> BatchLayout::get_layout_index(size_t i) const {
 LAYOUT_TYPE BatchLayout::type() const { return LAYOUT_TYPE::BATCH; }
 
 Layout* BatchLayout::deepCopy() const { return new BatchLayout(*this); }
+
+// returns the actual shape of the underlying buffer
+Shape BatchLayout::get_physical_shape() const {
+  Shape temp = shape_;
+  temp[0] = 1;
+  return temp;
+}
 
 // Operation Interface
 void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
@@ -939,7 +1020,6 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   Shape result_shape{one.shape()[0], two.shape()[1]};
   AS_LOG_INFO << "result shape: " << result_shape << std::endl;
 
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
   // create function to compute the elements of the results
   const auto& lhs_v = one.getValue();
   const auto& rhs_v = two.getValue();
@@ -1098,12 +1178,6 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   }
 #endif
   return result_ctxt;
-#else  //  ALUMINUM_SHARK_MINIMAL_LAYOUT
-  AS_LOG_S << "Batch layout matrix multiplication not supported in minimal mode"
-           << std::endl;
-  throw std::runtime_error(
-      "Batch layout matrix multiplication not supported in minimal mode");
-#endif
 }
 
 Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ctxt& two) const {
@@ -1128,7 +1202,6 @@ Ctxt BatchLayout::mat_mult_general(const Ctxt& one, const Ptxt& two) const {
 }
 
 // others
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
 
 Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                               xla::HloInstruction* hlo) const {
@@ -1365,12 +1438,14 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
 
 Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
                       const xla::Shape& new_shape, double pad_value) const {
+  AS_LOG_INFO << "BatchLayout pad" << std::endl;
   // compute size of the new shape
   int64_t size = 1;
   for (size_t i = 1; i < new_shape.dimensions().size(); i++) {
     size *= new_shape.dimensions()[i];
   }
   // create return vector and fill it with nullpointers
+  AS_LOG_DEBUG << "Creating result vector" << std::endl;
   std::vector<std::shared_ptr<HECtxt>> res_vec(size, std::shared_ptr<HECtxt>());
 
   // copy over the values we need
@@ -1407,6 +1482,12 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
         multi_index_to_flat(target_index, target_shape_batched);
     size_t input_index_f =
         multi_index_to_flat(input_index, input_shape_batched);
+    AS_LOG_DEBUG << "Copying value from "
+                 << IterablePrintWrapper<absl::Span<const int64_t>>(input_index)
+                 << "(" << input_index_f << ") to "
+                 << IterablePrintWrapper<absl::Span<const int64_t>>(
+                        target_index)
+                 << "(" << target_index_f << ")" << std::endl;
     res_vec[target_index_f] =
         std::shared_ptr<HECtxt>(lhs.getValue()[input_index_f]->deepCopy());
     return true;
@@ -1418,26 +1499,32 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
   // next we cheat a little by creating a shape that has a batch dim of 1
   Shape temp_shape = lhs.shape();
   temp_shape[0] = 1;
+  AS_LOG_DEBUG << "Creating dummy shape" << std::endl;
   auto xla_dummy_shape = create_xla_dummy_shape(temp_shape);
+  AS_LOG_DEBUG << "Starting iteration:" << std::endl;
   xla::ShapeUtil::ForEachIndex(xla_dummy_shape, zero_base,
                                xla::AsInt64Slice(xla_dummy_shape.dimensions()),
                                step, func);
 
   // now we need to replace all the null pointers
+  AS_LOG_DEBUG << "Creating padding values:" << std::endl;
   std::vector<double> pad_vec{pad_value};
-  for (size_t i = 0; res_vec.size(); ++i) {
+  for (size_t i = 0; i < res_vec.size(); ++i) {
     if (!res_vec[i]) {
+      AS_LOG_DEBUG << "Creating padding values at:" << i << "/"
+                   << res_vec.size() << std::endl;
+      AS_LOG_DEBUG << "context " << (const void*)(lhs.getContext())
+                   << std::endl;
       res_vec[i] = std::shared_ptr<HECtxt>(
           lhs.getContext()->encrypt(pad_vec, "padding"));
     }
   }
   // create and return padded ciphertext
+  AS_LOG_DEBUG << "Creating layout" << std::endl;
   auto layout =
       std::shared_ptr<Layout>(createLayout(LAYOUT_TYPE::BATCH, shark_shape));
   return Ctxt(res_vec, layout, "padded ctxt");
 }
-
-#endif
 
 Ctxt BatchLayout::reshape(Ctxt& lhs, const Shape& shape) const {
   if (lhs.shape()[0] != shape[0]) {
@@ -1479,8 +1566,6 @@ std::ostream& operator<<(std::ostream& os, const Layout& layout) {
   return os;
 }
 
-#ifndef ALUMINUM_SHARK_MINIMAL_LAYOUT
-
 xla::Shape create_xla_dummy_shape(const Shape& shape) {
   // the primitive type doesnt really matter so we just pick one
   std::vector<int64_t> cast_v(shape.begin(), shape.end());
@@ -1493,7 +1578,6 @@ Shape xla_shape_to_shark_shape(const xla::Shape& shape) {
   Shape ret(shape.dimensions().begin(), shape.dimensions().end());
   return ret;
 }
-#endif
 
 // layout registry
 static std::map<const LAYOUT_TYPE, std::function<Layout*(const Shape& shape)>>&
@@ -1523,6 +1607,10 @@ Layout* createLayout(const LAYOUT_TYPE type, const Shape& shape) {
   Layout* layout = it->second(shape);
   layout->init();
   return layout;
+}
+
+Layout* createLayout(const LAYOUT_TYPE type, const xla::Shape& shape) {
+  return createLayout(type, xla_shape_to_shark_shape(shape));
 }
 
 // register simple layout

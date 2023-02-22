@@ -1430,7 +1430,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     parent_->evaluated_[conv] = std::move(result);
 
     // can be costly to create the string. only do it if we need to log it
-    if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+    if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG) &&
+        ::aluminum_shark::log_large_vectors()) {
       AS_LOG_DEBUG << "Conv plaintext result "
                    << parent_->evaluated_[conv].ToString();
     }
@@ -1733,8 +1734,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             }
             return static_cast<ReturnT>(result_val);
           }));
-
-      AS_LOG_S << result.ToString() << std::endl;
+      if (::aluminum_shark::log_large_vectors()) {
+        AS_LOG_DEBUG << result.ToString() << std::endl;
+      }
     }
     parent_->evaluated_[dot] = std::move(result);
     return Status::OK();
@@ -1837,24 +1839,34 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         evaluated_operand.shape(), zero_base,
         AsInt64Slice(evaluated_operand.shape().dimensions()), step, func);
 
-    parent_->evaluated_[pad] = std::move(result);
-
     // check if there is ciphertext that needs padding
     auto* ctxt = parent_->GetEvaluatedCtxtFor(pad->operand(0));
     if (ctxt) {
-      if (ctxt->shape()[0] == result.shape().dimensions(0)) {
+      AS_LOG_DEBUG << "layout " << ctxt->layoutPointer() << std::endl;
+      AS_LOG_DEBUG
+          << "shape "
+          << ::aluminum_shark::IterablePrintWrapper<::aluminum_shark::Shape>(
+                 ctxt->shape())
+          << std::endl;
+      AS_LOG_DEBUG << "lhs batch dim" << ctxt->shape()[0] << std::endl;
+      AS_LOG_DEBUG << "rhs batch dim" << result.shape().dimensions(0)
+                   << std::endl;
+      if (ctxt->shape()[0] != result.shape().dimensions(0)) {
         AS_LOG_CRITICAL
             << "padding in the batch dimension currently not supported"
             << std::endl;
         TF_RET_CHECK(ctxt->shape()[0] == result.shape().dimensions(0));
       }
+      AS_LOG_DEBUG << "Getting padding value" << std::endl;
       double pad_value = GetAsDouble<ReturnT>(
           parent_->GetEvaluatedLiteralFor(pad->operand(1)), {});
+      AS_LOG_DEBUG << "Padding value: " << pad_value << std::endl;
       auto result_ctxt =
           ctxt->layout().pad(*ctxt, pad_config, result.shape(), pad_value);
       parent_->evaluated_ctxt_[pad] = result_ctxt;
     }
 
+    parent_->evaluated_[pad] = std::move(result);
     return Status::OK();
   }
 
@@ -2220,18 +2232,26 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         << " but is inferred to be: "
         << ShapeUtil::HumanStringWithLayout(inferred_return_shape);
 
+    AS_LOG_INFO << "Running Reduce window " << std::endl;
+    AS_LOG_DEBUG << "Reduction computation " << function->ToString()
+                 << std::endl;
     absl::InlinedVector<const Literal*, 2> input_literal_vec, init_literal_vec;
     auto input_arrays = reduce_window_instr->inputs();
     auto init_values = reduce_window_instr->init_values();
     int64_t num_args = input_arrays.size();
+
     for (int i = 0; i < num_args; ++i) {
       const Literal& input_literal =
           parent_->GetEvaluatedLiteralFor(input_arrays[i]);
       VLOG(3) << "HandleReduceWindow arg_literal: " << input_literal.ToString();
+      AS_LOG_DEBUG << "HandleReduceWindow arg_literal: "
+                   << input_literal.shape().ToString() << std::endl;
       input_literal_vec.push_back(&input_literal);
       const Literal& init_literal =
           parent_->GetEvaluatedLiteralFor(init_values[i]);
       VLOG(3) << "HandleReduceWindow init_literal: " << init_literal.ToString();
+      AS_LOG_DEBUG << "HandleReduceWindow init_literal: "
+                   << init_literal.ToString() << std::endl;
       TF_RET_CHECK(ShapeUtil::IsScalar(init_literal.shape()));
       init_literal_vec.push_back(&init_literal);
     }
@@ -2243,7 +2263,14 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const Shape window_shape = ShapeUtil::MakeShape(
         input_arrays[0]->shape().element_type(), window_dimension_sizes);
 
+    AS_LOG_DEBUG << "Window shape: " << window_shape.ToString() << std::endl;
+    // disable logging for the plaintext part
+    int log_level = ::aluminum_shark::get_log_level();
+    ::aluminum_shark::set_log_level(30);
+
     AluminumSharkHloEvaluator embedded_evaluator(parent_->max_loop_iterations_);
+    // disable the ciphertext callback
+    embedded_evaluator.use_call_back = false;
     // For each resulting dimension, calculate and assign computed value.
     auto evaluate_impl =
         [&](absl::Span<const int64_t> output_index) -> std::vector<Literal> {
@@ -2270,12 +2297,16 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                   *input_literal, operand_index, {}));
               VLOG(2) << "Pushing:" << curr_val_literal_vec.back().ToString()
                       << "\n";
+              AS_LOG_DEBUG << "Pushing:"
+                           << curr_val_literal_vec.back().ToString() << "\n";
               args.push_back(&curr_val_literal_vec.back());
             }
             computed_result[0] = embedded_evaluator.Evaluate(*function, args)
                                      .ConsumeValueOrDie();
             VLOG(2) << "Computed result:" << computed_result[0].ToString()
                     << "\n";
+            AS_LOG_DEBUG << "Computed result:" << computed_result[0].ToString()
+                         << "\n";
             // Clear visit states so that the we can use the evaluate again
             // on the same computation.
             embedded_evaluator.ResetVisitStates();
@@ -2284,38 +2315,170 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             }
           });
       VLOG(2) << "Final result size:" << computed_result.size() << "\n";
+      if (::aluminum_shark::log_large_vectors()) {
+        AS_LOG_DEBUG << "Final result size:" << computed_result.size() << "\n";
+      }
       for (const auto& res : computed_result) {
         VLOG(2) << res.ToString() << "\n";
+        AS_LOG_DEBUG << res.ToString() << "\n";
       }
       return computed_result;
     };
     Literal result(inferred_return_shape);
-    if (inferred_return_shape.IsTuple()) {
-      absl::InlinedVector<Literal, 1> results(num_args);
-      for (int64_t i = 0; i < num_args; ++i) {
-        results[i] = Literal(inferred_return_shape.tuple_shapes(i));
+    if (!parent_->skip_expensive_computation) {
+      if (inferred_return_shape.IsTuple()) {
+        absl::InlinedVector<Literal, 1> results(num_args);
+        for (int64_t i = 0; i < num_args; ++i) {
+          results[i] = Literal(inferred_return_shape.tuple_shapes(i));
+        }
+        TF_RETURN_IF_ERROR(ShapeUtil::ForEachIndexWithStatus(
+            inferred_return_shape.tuple_shapes(0),
+            [&](absl::Span<const int64_t> output_index) -> StatusOr<bool> {
+              std::vector<Literal> computed_result_vec =
+                  evaluate_impl(output_index);
+              for (int i = 0; i < computed_result_vec.size(); ++i) {
+                TF_RETURN_IF_ERROR(results[i].CopyElementFrom(
+                    computed_result_vec[i], {}, output_index));
+              }
+              return true;
+            }));
+        result = Literal::MoveIntoTuple(absl::MakeSpan(results));
+        VLOG(2) << "Final result is:" << result.ToString() << "\n";
+        AS_LOG_DEBUG << "Final result is:" << result.ToString() << "\n";
+      } else {
+        TF_RETURN_IF_ERROR(result.Populate<ReturnT>(
+            [&](absl::Span<const int64_t> output_index) {
+              return evaluate_impl(output_index)[0].template Get<ReturnT>({});
+            }));
       }
-      TF_RETURN_IF_ERROR(ShapeUtil::ForEachIndexWithStatus(
-          inferred_return_shape.tuple_shapes(0),
-          [&](absl::Span<const int64_t> output_index) -> StatusOr<bool> {
-            std::vector<Literal> computed_result_vec =
-                evaluate_impl(output_index);
-            for (int i = 0; i < computed_result_vec.size(); ++i) {
-              TF_RETURN_IF_ERROR(results[i].CopyElementFrom(
-                  computed_result_vec[i], {}, output_index));
-            }
-            return true;
-          }));
-      result = Literal::MoveIntoTuple(absl::MakeSpan(results));
-      VLOG(2) << "Final result is:" << result.ToString() << "\n";
     } else {
-      TF_RETURN_IF_ERROR(
-          result.Populate<ReturnT>([&](absl::Span<const int64_t> output_index) {
-            return evaluate_impl(output_index)[0].template Get<ReturnT>({});
-          }));
+      AS_LOG_WARNING
+          << "skipping pooling on plaintext. plaintext results will be invalid"
+          << std::endl;
     }
+
+    ::aluminum_shark::set_log_level(log_level);
     VLOG(2) << "Final result is:" << result.ToString() << "\n";
+    if (::aluminum_shark::log_large_vectors()) {
+      AS_LOG_DEBUG << "Final result is:" << result.ToString() << "\n";
+    }
     parent_->evaluated_[reduce_window] = std::move(result);
+
+    // encrypted execution
+
+    ::aluminum_shark::Ctxt* ctxt =
+        parent_->GetEvaluatedCtxtFor(input_arrays[0]);
+    if (!ctxt) {
+      return Status::OK();
+    }
+    if (num_args > 1) {
+      AS_LOG_CRITICAL
+          << "Reduction over multiple tensor currently not supported"
+          << std::endl;
+      TF_RET_CHECK(num_args > 1);
+    }
+    // actual physical shape to iterate through
+    auto ctxt_shape = ctxt->layout().get_physical_shape_xla();
+    // create dummy areguments for the reduction computation
+    absl::InlinedVector<const Literal*, 2> args{
+        &parent_->GetEvaluatedLiteralFor(init_values[0]),
+        &parent_->GetEvaluatedLiteralFor(init_values[0])};
+    // create a dummy layout we use inside for the ciphertext wrappers
+    std::shared_ptr<::aluminum_shark::Layout> dummy_layout(
+        ::aluminum_shark::createLayout(ctxt->layout().type(),
+                                       std::vector<size_t>{1}));
+    // reduction function
+    auto reduce_func = [&](absl::Span<const int64_t> output_index)
+        -> std::shared_ptr<::aluminum_shark::HECtxt> {
+      // accumlates the result in the window
+      std::shared_ptr<::aluminum_shark::HECtxt> computed_result;
+      // create a local evaluator so we can multithread this
+      AluminumSharkHloEvaluator embedded_evaluator(
+          parent_->max_loop_iterations_);
+      // disable the ciphertext callback
+      embedded_evaluator.use_call_back = false;
+
+      // reduce all the values in the window
+      IterateThroughWindow(
+          window_shape, window, ctxt_shape, output_index,
+          [&](absl::Span<const int64_t> operand_index) -> void {
+            // check first iteration
+            if (!computed_result) {
+              computed_result = ctxt->layout().get(operand_index, *ctxt);
+              return;
+            }
+            // create Ctxts so we can pass it to the embedded_evaluator
+            ::aluminum_shark::Ctxt wrapped_result(
+                std::vector<std::shared_ptr<::aluminum_shark::HECtxt>>{
+                    computed_result},
+                dummy_layout, "lhs dummy");
+            ::aluminum_shark::Ctxt wrapped_operand(
+                std::vector<std::shared_ptr<::aluminum_shark::HECtxt>>{
+                    ctxt->layout().get(operand_index, *ctxt)},
+                dummy_layout, "rhs dummy");
+
+            embedded_evaluator
+                .Evaluate(*function, args,
+                          std::vector<::aluminum_shark::Ctxt>{wrapped_result,
+                                                              wrapped_operand})
+                .ConsumeValueOrDie();
+            computed_result =
+                embedded_evaluator.get_ctxt_result().getValue()[0];
+            // AS_LOG_DEBUG << "Computed result:"
+            //              << computed_result[0].ToString() << "\n";
+            // Clear visit states so that the we can use the evaluate again
+            // on the same computation.
+            embedded_evaluator.ResetVisitStates();
+          });
+      return computed_result;
+    };
+
+    // create return layout
+    std::shared_ptr<::aluminum_shark::Layout> result_layout(
+        ::aluminum_shark::createLayout(ctxt->layout().type(),
+                                       inferred_return_shape));
+    // create return vector
+    std::vector<std::shared_ptr<::aluminum_shark::HECtxt>> result_vec(
+        ::aluminum_shark::size_of_shape(result_layout->get_physical_shape()),
+        std::shared_ptr<::aluminum_shark::HECtxt>());
+    // create return ciphertext
+    ::aluminum_shark::Ctxt result_ctxt(result_vec, result_layout,
+                                       reduce_window->name());
+
+    auto shape_ = result_layout->get_physical_shape_xla();
+    std::vector<int64_t> base(shape_.dimensions_size());
+    std::vector<int64_t> incr(shape_.dimensions_size(), 1);
+    AS_LOG_DEBUG
+        << "running paralllel processing for shape "
+        << ::aluminum_shark::IterablePrintWrapper<absl::Span<const int64_t>>(
+               shape_.dimensions())
+        << " base "
+        << ::aluminum_shark::IterablePrintWrapper<std::vector<int64_t>>(base)
+        << " increment "
+        << ::aluminum_shark::IterablePrintWrapper<std::vector<int64_t>>(incr)
+        << " count "
+        << ::aluminum_shark::IterablePrintWrapper<absl::Span<const int64_t>>(
+               AsInt64Slice(shape_.dimensions()))
+        << std::endl;
+    ShapeUtil::ForEachIndexParallel(
+        shape_, base, /*count=*/AsInt64Slice(shape_.dimensions()), incr,
+        [&](absl::Span<const int64_t> output_index) -> void {
+          auto temp_ctxt = reduce_func(output_index);
+          AS_LOG_DEBUG << "setting pooling result at "
+                       << ::aluminum_shark::IterablePrintWrapper<
+                              absl::Span<const int64_t>>(output_index)
+                       << " layout is " << result_layout->type() << std::endl;
+          result_layout->set(output_index, result_ctxt, temp_ctxt);
+          AS_LOG_DEBUG << "result set" << std::endl;
+        });
+
+    // sanity check
+    for (auto& c : result_ctxt.getValue()) {
+      TF_RET_CHECK(c != nullptr);
+    }
+    parent_->evaluated_ctxt_[reduce_window] = result_ctxt;
+    // evaluated_
+
     return Status::OK();
   }
 

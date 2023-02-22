@@ -15,6 +15,8 @@ class E2DMLayout : public SimpleLayout {
   virtual LAYOUT_TYPE type() const override;
   virtual Layout* deepCopy() const override;
 
+  Shape get_physical_shape() const override { return Shape{size_}; }
+
   // Operation Interface
   // handled by Simplelayout
 

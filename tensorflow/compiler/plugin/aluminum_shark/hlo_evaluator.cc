@@ -240,12 +240,13 @@ AluminumSharkHloEvaluator::AluminumSharkHloEvaluator(
 
 StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
     const HloComputation& computation,
-    absl::Span<const Literal* const> arg_literals) {
+    absl::Span<const Literal* const> arg_literals,
+    std::vector<::aluminum_shark::Ctxt> ciphertexts) {
   CHECK(computation.parent() != nullptr);
   XLA_VLOG_LINES(2, "AluminumSharkHloEvaluator::Evaluate computation:\n" +
                         computation.ToString());
-  AS_LOG("AluminumSharkHloEvaluator::Evaluate computation:\n" +
-         computation.ToString());
+  AS_LOG_INFO << "AluminumSharkHloEvaluator::Evaluate computation:\n"
+              << computation.ToString() << std::endl;
 
   if (arg_literals.size() != computation.num_parameters()) {
     return InvalidArgument(
@@ -268,8 +269,21 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
 
   evaluated_.clear();
   arg_literals_.clear();
+  arg_ctxts_.clear();
+  size_t i = 0;
+
+  AS_LOG_INFO << "Number of ciphertexts " << ciphertexts.size() << std::endl;
+
   for (const auto& literal_ptr : arg_literals) {
     arg_literals_.push_back(&*literal_ptr);
+    if (i < ciphertexts.size()) {
+      ::aluminum_shark::Ctxt ctxt = ciphertexts[i];
+      AS_LOG_INFO << "Input Literal to Ctxt: "
+                  << literal_ptr->shape().ToString() << " -> " << ctxt.getName()
+                  << std::endl;
+      arg_ctxts_[i] = ctxt;
+    }
+    ++i;
   }
 
   // Re-seed RNG, either from the configuration's seed or a monotonic
@@ -292,7 +306,7 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
       ss << "\t" << oper->name() << " id = " << oper->unique_id() << "\n";
     }
   }
-  AS_LOG(ss.str());
+  AS_LOG_INFO << ss.str() << std::endl;
 
   TF_RETURN_IF_ERROR(computation.Accept(this));
 
@@ -311,14 +325,20 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
   // invoke result callback
   ::aluminum_shark::Ctxt* result_ctxt =
       GetEvaluatedCtxtFor(computation.root_instruction());
-  if (!result_ctxt) {
+  if (!result_ctxt && use_call_back) {
     AS_LOG_CRITICAL << "no computation result " << std::endl;
     throw std::runtime_error("no computation result ");
+    AS_LOG_S << "About to invoke result compution result: "
+             << result_ctxt->to_string() << std::endl;
   }
-  AS_LOG_S << "About to invoke result compution result: "
-           << result_ctxt->to_string() << std::endl;
-  std::vector<::aluminum_shark::Ctxt> result{*result_ctxt};
-  computation_handle_->transfereResults(result);
+  if (result_ctxt) {
+    // set the result so we can retrieve it later
+    ctxt_result = *result_ctxt;
+    if (use_call_back) {
+      std::vector<::aluminum_shark::Ctxt> result{*result_ctxt};
+      computation_handle_->transfereResults(result);
+    }
+  }
 
   return GetEvaluatedLiteralFor(computation.root_instruction()).Clone();
 }
@@ -2717,7 +2737,7 @@ Status AluminumSharkHloEvaluator::HandleCustomCall(
 
 Status AluminumSharkHloEvaluator::Preprocess(HloInstruction* hlo) {
   VLOG(2) << "About to visit HLO: " << hlo->ToString();
-  AS_LOG("About to visit HLO: " + hlo->ToString());
+  AS_LOG_INFO << "About to visit HLO: " << hlo->ToString() << std::endl;
   return ShapeUtil::ValidateShape(hlo->shape());
 }
 

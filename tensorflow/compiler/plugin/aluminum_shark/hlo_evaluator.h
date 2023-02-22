@@ -99,11 +99,15 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   //
   // (Dummy template arg is to reduce the overloading priority of one overload
   // so that Evaluate(module, {}) resolves unambiguously.)
-  StatusOr<Literal> Evaluate(const HloComputation& computation,
-                             absl::Span<const Literal* const> arg_literals);
+  StatusOr<Literal> Evaluate(
+      const HloComputation& computation,
+      absl::Span<const Literal* const> arg_literals,
+      std::vector<::aluminum_shark::Ctxt> ciphertexts = {});
+
   template <typename Dummy = void>
-  StatusOr<Literal> Evaluate(const HloComputation& computation,
-                             absl::Span<const Literal> arg_literals) {
+  StatusOr<Literal> Evaluate(
+      const HloComputation& computation, absl::Span<const Literal> arg_literals,
+      std::vector<::aluminum_shark::Ctxt> ciphertexts = {}) {
     std::vector<const Literal*> arg_literal_ptrs;
 
     AS_LOG_S << "computation " << computation.name() << std::endl;
@@ -118,50 +122,30 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
         ::aluminum_shark::PythonHandle::getInstance();
     computation_handle_ = ph.consumeComputationHandle();
 
-    std::vector<::aluminum_shark::Ctxt> ctxts =
-        computation_handle_->getCiphertTexts();
+    std::vector<::aluminum_shark::Ctxt> ctxts;
+    if (ciphertexts.size() != 0) {
+      AS_LOG_INFO << ciphertexts.size() << " ciphertexts passed in as arguments"
+                  << std::endl;
+      ctxts = ciphertexts;
+    } else {
+      ctxts = computation_handle_->getCiphertTexts();
+      AS_LOG_INFO << ctxts.size() << " ciphertexts retrieved from handle"
+                  << std::endl;
+    }
 
     // take the ctxt passed in from python and map them to literals
-    AS_LOG_S << "Number of arg_literals: "
-             << std::to_string(arg_literals.size())
-             << " number of arg_ctxts: " + std::to_string(ctxts.size())
-             << std::endl;
-    size_t i = 0;
-    // create the input ctxts and plaintexts
-    arg_ctxts_.clear();
-    arg_ptxts_.clear();
-    const ::aluminum_shark::HEContext* context =
-        [&]() -> const ::aluminum_shark::HEContext* {
-      if (ctxts.size() > 0) {
-        return ctxts[0].getContext();
-      }
-      return nullptr;
-    }();
+    AS_LOG_INFO << "Number of arg_literals: "
+                << std::to_string(arg_literals.size())
+                << " number of arg_ctxts: " + std::to_string(ctxts.size())
+                << std::endl;
 
     ::aluminum_shark::LAYOUT_TYPE layout_type =
         ctxts.size() > 0 ? ctxts[0].layout().type()
                          : ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED;
     for (const auto& l : arg_literals) {
       arg_literal_ptrs.push_back(&l);
-      if (context != nullptr) {
-        if (i < ctxts.size()) {
-          ::aluminum_shark::Ctxt ctxt = ctxts[i];
-          AS_LOG_INFO << "Input Literal to Ctxt: " << l.shape().ToString()
-                      << " -> " << ctxt.getName() << std::endl;
-          arg_ctxts_[i] = ctxt;
-        }
-        // creating plaintext on demand
-        // else {
-        //   AS_LOG_S << "Input Literal to Ptxt: " << l.shape().ToString()
-        //            << std::endl;
-        //   arg_ptxts_[i] = convertLiteralToPtxt(l, "arg" + std::to_string(i),
-        //                                        context, layout_type);
-        //   // AS" -> " << arg_ptxts_[i].getName() << std::endl;
-        // }
-        ++i;
-      }
     }
-    return Evaluate(computation, arg_literal_ptrs);
+    return Evaluate(computation, arg_literal_ptrs, ctxts);
   }
 
   // Gets the value of running a single HLO instruction.
@@ -418,84 +402,20 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // Just like the literals we are tracking Ctxt to HLO mapping
   // retunrns nullptr if there is no ciphertext
   ::aluminum_shark::Ctxt* GetEvaluatedCtxtFor(const HloInstruction* hlo) {
-    AS_LOG("Getting Ctxt for " + hlo->name());
-    // creating Ptxt on the fly now
-    // if (hlo->IsConstant()) {
-    //   auto& literal = hlo->literal();
-    //   AS_LOG("Converting constant to ctxt, literal: " +
-    //          literal.ToStringWithLayout() +
-    //          " Hlo shape: " + hlo->shape().ToString());
-    //   // get the context that we are working with by taking it from the first
-    //   // input parameter
-    //   AS_LOG("Getting Context");
-    //   const ::aluminum_shark::HEContext* context =
-    //   arg_ctxts_[0].getContext(); const auto type =
-    //   literal.shape().element_type(); AS_LOG_S << "constant: " << std::endl;
-    //   AS_LOG_SA << "\telement_type: "
-    //             << ::xla::primitive_util::LowercasePrimitiveTypeName(type)
-    //             << std::endl;
-    //   AS_LOG_SA << "\tliteral shape: " << literal.shape().ToString()
-    //             << std::endl;
-    //   const std::string& name = hlo->name();
-    //   // once a proper compiler is inplace we can layout all these plaintext
-    //   // into the form that they are needed in later. for now we rely on the
-    //   // forced layout
-    //   if (computation_handle_->useForcedLayout()) {
-    //     AS_LOG_S << "using forced layout "
-    //              << computation_handle_->getForcedLayout() << std::endl;
-    //     constant_ptxt_[hlo] =
-    //         convertLiteralToPtxt(literal, name, context,
-    //                              ::aluminum_shark::string_to_layout_type(
-    //                                  computation_handle_->getForcedLayout()));
-    //   } else {
-    //     constant_ptxt_[hlo] = convertLiteralToPtxt(
-    //         literal, name, context,
-    //         ::aluminum_shark::LAYOUT_TYPE::UNSUPPORTED);
-    //   }
-
-    //   return constant_ptxt_[hlo];
-    // }
+    AS_LOG_INFO << "Getting Ctxt for " << hlo->name() << std::endl;
     if (hlo->opcode() == HloOpcode::kParameter) {
       // check if the parameter is a plaintext or ciphertext
-      AS_LOG_S << "Retrieving parameter." << std::endl;
+      AS_LOG_INFO << "Retrieving parameter." << std::endl;
       auto it_c = arg_ctxts_.find(hlo->parameter_number());
-      AS_LOG_S << "Searched throught Ctxts." << std::endl;
+      AS_LOG_INFO << "Searched throught Ctxts." << std::endl;
       if (it_c != arg_ctxts_.end()) {
-        AS_LOG_S << "Found Ctxt: " << it_c->first << " "
-                 << it_c->second.getName() << std::endl;
+        AS_LOG_INFO << "Found Ctxt: " << it_c->first << " "
+                    << it_c->second.getName() << std::endl;
         return &it_c->second;
       }
-      // creating plaintext on the fly now
-      //   auto it_p = arg_ptxts_.find(hlo->parameter_number());
-      //   if (it_p != arg_ptxts_.end()) {
-      //     return it_p->second;
-      //   }
-      //   AS_LOG_S << "Couldn't find parameter." << std::endl;
     }
-    AS_LOG_S << "Searching through maps " << std::endl;
+    AS_LOG_DEBUG << "Searching through maps " << std::endl;
     auto it = evaluated_ctxt_.find(hlo);
-    // plaintext are createad in the fly now
-
-    // if (it == evaluated_ctxt_.end()) {
-    //   AS_LOG_S << "Did not find a ctxt for " << hlo->ToString()
-    //            << " looking for a ptxt" << std::endl;
-    //   auto it_ptxt = constant_ptxt_.find(hlo);
-    //   if (it_ptxt != constant_ptxt_.end()) {
-    //     return &it_ptxt->second;
-    //   }
-    //   AS_LOG_S << "Did not find a ptxt for " << hlo->ToString() << " either"
-    //            << std::endl;
-    //   AS_LOG_S << "Dumping maps: " << std::endl;
-    //   for (auto iter = evaluated_ctxt_.begin(); iter !=
-    //   evaluated_ctxt_.end();
-    //        iter++) {
-    //     AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
-    //   }
-    //   for (auto iter = constant_ptxt_.begin(); iter != constant_ptxt_.end();
-    //        iter++) {
-    //     AS_LOG_SA << "\t" << iter->first->ToString() << std::endl;
-    //   }
-    // }
     if (it == evaluated_ctxt_.end()) {
       AS_LOG_INFO << "could not find evaluated value for: " << hlo->ToString();
       AS_LOG_INFO << "Dumping maps: " << std::endl;
@@ -505,6 +425,7 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       }
       return nullptr;
     }
+    AS_LOG_DEBUG << "Found " << it->second.to_string() << std::endl;
     return &it->second;
   }
 
@@ -562,6 +483,16 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // check if the given hlo can be performed inplace
   bool inplace(const HloInstruction* hlo);
 
+  // retireve a ciphertext result
+  ::aluminum_shark::Ctxt get_ctxt_result() { return ctxt_result; };
+
+  // If true use the global ciphertext result callback after the computatio
+  bool use_call_back = true;
+
+  // skips expensive plaintext computation. results on plaintext will become
+  // invalid
+  bool skip_expensive_computation = true;
+
  private:
   template <typename ReturnT, typename NativeT>
   static StatusOr<Literal> ElementWiseUnaryOpImpl(
@@ -605,6 +536,11 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   std::function<StatusOr<Literal>(HloInstruction* custom_call,
                                   absl::Span<const Literal*> operands)>
       custom_call_handler_;
+
+  // ciphertext related
+
+  // store the ciphertext result so it can be retrieved later
+  ::aluminum_shark::Ctxt ctxt_result;
 
   TF_DISALLOW_COPY_AND_ASSIGN(AluminumSharkHloEvaluator);
 
