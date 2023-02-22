@@ -322,7 +322,9 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
       static_cast<aluminum_shark_Context*>(context_ptr);
   // read input values
   std::vector<double> ptxt_vec(values, values + size);
-  AS_LOG_DEBUG << "Encrypting Double. Values: " << ptxt_vec << std::endl;
+  if (aluminum_shark::log_large_vectors()) {
+    AS_LOG_DEBUG << "Encrypting Double. Values: " << ptxt_vec << std::endl;
+  }
 
   AS_LOG_INFO << "number of values (passed/read) " << size << "/"
               << ptxt_vec.size() << ", name: " << name << std::endl;

@@ -83,11 +83,15 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
     std::vector<double> vec = convertLiteralToPtxt<double>(literal_);
     AS_LOG_INFO << "Converted literal to Ptxt " << vec.size() << " items"
                 << std::endl;
-    AS_LOG_DEBUG << vec << std::endl;
+    if (log_large_vectors()) {
+      AS_LOG_DEBUG << vec << std::endl;
+    }
     auto vec_with_layout(layout->layout_vector(vec));
     AS_LOG_INFO << "layed out vector" << std::endl;
     for (const auto& v : vec_with_layout) {
-      AS_LOG_DEBUG << v << std::endl;
+      if (log_large_vectors()) {
+        AS_LOG_DEBUG << v << std::endl;
+      }
       // TODO RP: maybe move here
       value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
     }

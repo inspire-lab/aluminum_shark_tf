@@ -56,7 +56,10 @@ StatusOr<Literal> AluminumSharkExecutable::Evaluate(
   if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
     // create logging string
     for (auto& l : arg_literals) {
-      ss << l << ", ";
+      ss << l.shape().ToString() << ", ";
+      if (::aluminum_shark::log_large_vectors()) {
+        ss << l << ", ";
+      }
     }
     AS_LOG_DEBUG << "Evaluate: " << std::to_string(arg_literals.size())
                  << " literals: " << ss.str();
