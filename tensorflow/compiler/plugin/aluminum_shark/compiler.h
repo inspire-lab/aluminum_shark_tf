@@ -51,6 +51,12 @@ class AluminumSharkCompiler : public Compiler {
 
   se::Platform::Id PlatformId() const override;
 
+  // Build a map that maps each instruction to a set of instuction that depend
+  // on it. at execution time an instruction is removed from the set once it is
+  // evaluated. once the set is item the the key instruction can be freed
+  std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+  BuildMemoryDepencies(HloModule* module);
+
   std::unordered_set<const HloInstruction*> FindInplaceOps(HloModule* module);
 
   void Precompute(HloModule* module, AluminumSharkHloEvaluator* evaluator);

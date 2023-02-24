@@ -116,6 +116,8 @@ StatusOr<std::unique_ptr<Executable>> AluminumSharkCompiler::RunBackend(
   // find inplace ops
   evaluator->set_inplace_ops(FindInplaceOps(hlo_module.get()));
 
+  evaluator->set_memory_dependencies(BuildMemoryDepencies(hlo_module.get()));
+
   // precomupte all ops with known inputs
   Precompute(hlo_module.get(), evaluator.get());
 
@@ -173,6 +175,62 @@ se::Platform::Id AluminumSharkCompiler::PlatformId() const {
 HloCostAnalysis::ShapeSizeFunction
 AluminumSharkCompiler::ShapeSizeBytesFunction() const {
   return AluminumSharkExecutable::ShapeSizeBytes;
+}
+
+std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+AluminumSharkCompiler::BuildMemoryDepencies(HloModule* module) {
+  AS_LOG_INFO << "building memory dependency map" << std::endl;
+  // a map that maps each instruction to a set of instuction that depend on it
+  // at execution time an instruction is removed from the set once it is
+  // evaluated. once the set is item the the key instruction can be freed
+  std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+      deps;
+
+  // iterate over all nodes
+  HloInstruction* root = module->entry_computation()->root_instruction();
+  std::unordered_set<const HloInstruction*> nodes;
+  nodes.insert(root);
+  while (nodes.size() != 0) {
+    // get first node from the set of unvisted nodes and remove
+    auto node_iter = nodes.begin();
+    const HloInstruction* node = *node_iter;
+    AS_LOG_DEBUG << "visting " << node->name() << std::endl;
+    nodes.erase(node_iter);
+
+    // for each operand insert the current node into the
+    auto n_operands = node->operand_count();
+    for (size_t i = 0; i < n_operands; ++i) {
+      const HloInstruction* operand = node->operand(i);
+      // this should never happend but we don't want to add the root instruction
+      // to the map. the root instruction ciphertext must not be deleted
+      if (operand == root) {
+        continue;
+      }
+      // add it to the iteration set
+      nodes.insert(operand);
+      // check if the operand is in the map
+      auto iter = deps.find(operand);
+      if (iter == deps.end()) {
+        deps[operand] = {node};
+      } else {
+        iter->second.insert(node);
+      }
+    }
+  }
+  // log the memory map
+  std::stringstream ss;
+  for (auto iter : deps) {
+    // get the set of operations and remove hlo
+    const HloInstruction* key = iter.first;
+    auto& op_set = iter.second;
+    ss << "\t " << key->name() << " required for: ";
+    for (auto op : op_set) {
+      ss << op->name() << ", ";
+    }
+  }
+  AS_LOG_DEBUG << "Memory depencies: " << ss.str() << std::endl;
+
+  return deps;
 }
 
 std::unordered_set<const HloInstruction*> AluminumSharkCompiler::FindInplaceOps(

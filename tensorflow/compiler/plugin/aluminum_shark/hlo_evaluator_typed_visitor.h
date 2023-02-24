@@ -3532,6 +3532,10 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
   }
 
   AluminumSharkHloEvaluator* parent_;
+
+  Status Postprocess(HloInstruction* hlo) override {
+    return parent_->Postprocess(hlo);
+  }
 };
 
 // These extern templates prevent users of this class from implicitly

@@ -315,12 +315,12 @@ StatusOr<Literal> AluminumSharkHloEvaluator::Evaluate(
       VLOG(100) << instr->name() << " = " << GetEvaluatedLiteralFor(instr);
     }
   }
-  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
-    for (const HloInstruction* instr : computation.instructions()) {
-      ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
-    }
-    AS_LOG(ss.str());
-  }
+  // if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
+  //   for (const HloInstruction* instr : computation.instructions()) {
+  //     ss << instr->name() << " = " << GetEvaluatedLiteralFor(instr) << "\n";
+  //   }
+  //   AS_LOG(ss.str());
+  // }
 
   // invoke result callback
   ::aluminum_shark::Ctxt* result_ctxt =
@@ -2751,7 +2751,9 @@ Status AluminumSharkHloEvaluator::Postprocess(HloInstruction* hlo) {
           hlo->shape().layout())) {
     evaluated_.at(hlo) = evaluated_.at(hlo).Relayout(hlo->shape());
   }
-
+  AS_LOG_DEBUG << "running postprocessing for: " << hlo->ToString()
+               << std::endl;
+  check_and_free_memory(hlo);
   return Status::OK();
 }
 
@@ -2825,8 +2827,54 @@ void AluminumSharkHloEvaluator::set_inplace_ops(
   inplace_ops = ops;
 }
 
+void AluminumSharkHloEvaluator::set_memory_dependencies(
+    std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+        deps) {
+  memory_dependencies = deps;
+}
+
 bool AluminumSharkHloEvaluator::inplace(const HloInstruction* hlo) {
   return inplace_ops.find(hlo) != inplace_ops.end();
+}
+
+void AluminumSharkHloEvaluator::check_and_free_memory(
+    const HloInstruction* hlo) {
+  // computation_handle_ can be nullptr
+  if (memory_dependencies.empty() || !computation_handle_ ||
+      !computation_handle_->clearMemory()) {
+    AS_LOG_DEBUG << "No memory to clear. Map entries "
+                 << memory_dependencies.size() << " computation handle "
+                 << computation_handle_ << std::endl;
+    return;
+  }
+  AS_LOG_INFO << "running memory clean up checks for" << hlo->name()
+              << std::endl;
+  // iterate through all key/value pairs and remove hlo from the value set.
+  // if the set is empty we can remove key from dictonary and free up the memory
+  // by deleting the ciphertext
+  // we can't use the range based loop since we are modifying the container
+  for (auto iter = memory_dependencies.begin(), next_iter = iter;
+       iter != memory_dependencies.end(); iter = next_iter) {
+    ++next_iter;
+    // get the set of operations and remove hlo
+    const HloInstruction* key = iter->first;
+    auto& op_set = iter->second;
+    // std::cout << "\t " << key->name() << " required for: ";
+    // for (auto op : op_set) {
+    //   std::cout << op->name() << ", ";
+    // }
+    // std::cout << std::endl;
+    op_set.erase(hlo);
+
+    if (op_set.empty()) {
+      AS_LOG_INFO << "clearing memory for " << key->name() << std::endl;
+      // remove key from:
+      // 1. the dependency map
+      memory_dependencies.erase(key);
+      // 2. the evaluated ciphertexts
+      evaluated_ctxt_.erase(key);
+    }
+  }
 }
 
 }  // namespace aluminum_shark

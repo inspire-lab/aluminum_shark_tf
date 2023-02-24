@@ -124,6 +124,8 @@ const char* ComputationHandle::getForcedLayout() const {
   return forced_layout_;
 }
 
+bool ComputationHandle::clearMemory() const { return clear_memory_; }
+
 }  // namespace aluminum_shark
 
 /***********************/
@@ -414,14 +416,15 @@ void aluminum_shark_DestroyCiphertext(void* ctxt_ptr) {
 
 void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
                                          void (*result_callback)(void*, int),
-                                         const char* forced_layout) {
+                                         const char* forced_layout,
+                                         bool clear_memory) {
   aluminum_shark_Computation* ret = new aluminum_shark_Computation();
   if (forced_layout && strlen(forced_layout) == 0) {
     ret->computation = std::make_shared<aluminum_shark::ComputationHandle>(
-        ctxt_callback, result_callback, nullptr);
+        ctxt_callback, result_callback, nullptr, clear_memory);
   } else {
     ret->computation = std::make_shared<aluminum_shark::ComputationHandle>(
-        ctxt_callback, result_callback, forced_layout);
+        ctxt_callback, result_callback, forced_layout, clear_memory);
   }
   auto& pyh = ::aluminum_shark::PythonHandle::getInstance();
   pyh.registerComputation(ret->computation);

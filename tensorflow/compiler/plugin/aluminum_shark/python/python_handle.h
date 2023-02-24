@@ -23,10 +23,11 @@ class ComputationHandle {
  public:
   ComputationHandle(void* (*ctxt_callback)(int*),
                     void (*result_callback)(void*, int),
-                    const char* forced_layout)
+                    const char* forced_layout, bool clear_memory)
       : ctxt_callback_(ctxt_callback),
         result_callback_(result_callback),
-        forced_layout_(forced_layout){};
+        forced_layout_(forced_layout),
+        clear_memory_(clear_memory){};
 
   // uses the python callback to get the handles
   std::vector<Ctxt> getCiphertTexts();
@@ -37,6 +38,9 @@ class ComputationHandle {
   // used forced layout
   bool useForcedLayout() const;
 
+  // clear memory during computation
+  bool clearMemory() const;
+
   // use this layout for all ptxt and ctxt in the computation. can reutrn
   // `nullptr`
   const char* getForcedLayout() const;
@@ -45,6 +49,7 @@ class ComputationHandle {
   std::function<void*(int*)> ctxt_callback_;
   std::function<void(void*, int)> result_callback_;
   const char* forced_layout_;
+  const bool clear_memory_;
 };
 
 class PythonHandle {
@@ -239,7 +244,8 @@ typedef struct aluminum_shark_Computation {
 // registert for the next computation
 void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
                                          void (*result_callback)(void*, int),
-                                         const char* forced_layout);
+                                         const char* forced_layout,
+                                         bool clear_memory);
 
 // turns logging on or off
 void aluminum_shark_EnableLogging(bool on);

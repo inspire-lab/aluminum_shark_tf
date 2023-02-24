@@ -234,6 +234,10 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   void set_inplace_ops(std::unordered_set<const HloInstruction*> ops);
 
+  void set_memory_dependencies(
+      std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+          deps);
+
  protected:
   // Make AluminumSharkHloEvaluatorTypedVisitor a friend because it is
   // logically part of this class.
@@ -482,6 +486,15 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // check if the given hlo can be performed inplace
   bool inplace(const HloInstruction* hlo);
+
+  // a map of memory dependencies. if the set is empty the ctxts for the key can
+  // be deleted
+  std::map<const HloInstruction*, std::unordered_set<const HloInstruction*>>
+      memory_dependencies;
+
+  // call once the hlo has been evaluated to free ctxt memory if we don't need
+  // it anymore
+  void check_and_free_memory(const HloInstruction* hlo);
 
   // retireve a ciphertext result
   ::aluminum_shark::Ctxt get_ctxt_result() { return ctxt_result; };
