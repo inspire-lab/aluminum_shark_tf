@@ -35,7 +35,7 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
   auto& lhs_v = one.getValue();
   AS_LOG_DEBUG << "number of ctxts on the left hand side " << lhs_v.size()
                << std::endl;
-  HECtxt* lhs_hectxt = lhs_v[0].get();
+  shared_ptr<HECtxt> lhs_hectxt = lhs_v[0];
 
   AS_LOG_INFO << "Dot shapes " << one.shape() << std::endl;
   Shape two_shape = two.shape();
@@ -52,7 +52,7 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
   auto context = one.getContext();
   // holds the result of the first linear transform and at the end it will hold
   // the computation result
-  HECtxt* c_0 = nullptr;
+  shared_ptr<HECtxt> c_0;
 
   // square case
   if (one.shape().size() == 2 && one.shape()[0] == one.shape()[1]) {
@@ -81,10 +81,10 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
           }
         }
       }
-      HEPtxt* ptxt_u = context->createPtxt(u);
+      shared_ptr<HEPtxt> ptxt_u = context->createPtxt(u);
 
       // compute the sum
-      if (c_0 == nullptr) {
+      if (!c_0) {
         // first iteration
         AS_LOG_DEBUG << "rotating k=" << k << " " << lhs_hectxt->to_string()
                      << std::endl;
@@ -95,21 +95,20 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
       } else {
         AS_LOG_DEBUG << "rotating k=" << k << " " << lhs_hectxt->to_string()
                      << std::endl;
-        HECtxt* temp_ctxt = lhs_hectxt->rotate(k);
+        shared_ptr<HECtxt> temp_ctxt = lhs_hectxt->rotate(k);
         AS_LOG_DEBUG << "rotated " << temp_ctxt->to_string() << std::endl;
         temp_ctxt->multInPlace(ptxt_u);
         AS_LOG_DEBUG << "masked " << temp_ctxt->to_string() << std::endl;
         c_0->addInPlace(temp_ctxt);
         AS_LOG_DEBUG << "added " << c_0->to_string() << std::endl;
         // we are done with temp_ctxt
-        delete temp_ctxt;
       }
     }
 
     AS_LOG_DEBUG << "column shifiting the lhs ctxt" << std::endl;
     // column shift the c_0 d-1 times
-    std::vector<HECtxt*> ctxts(d - 1,
-                               nullptr);  // holds the column shifted ctxts
+    std::vector<shared_ptr<HECtxt>> ctxts(d -
+                                          1);  // holds the column shifted ctxts
     // compute the row shifting diagonal vectors
     for (size_t k = 1; k < d; ++k) {
       // create 2 diagonal vectors
@@ -126,23 +125,21 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
       }
 
       // encode diagonla into plaintext, rotate c0 and mult by plaintext
-      HEPtxt* v_0p = context->createPtxt(v_0);
+      shared_ptr<HEPtxt> v_0p = context->createPtxt(v_0);
       AS_LOG_DEBUG << "rotating k=" << k << " " << c_0->to_string()
                    << std::endl;
-      HECtxt* first = c_0->rotate(k);
+      shared_ptr<HECtxt> first = c_0->rotate(k);
       AS_LOG_DEBUG << "rotated " << c_0->to_string() << std::endl;
       first->multInPlace(v_0p);
       AS_LOG_DEBUG << "masked " << first->to_string() << std::endl;
-      delete v_0p;
 
-      HEPtxt* v_1p = context->createPtxt(v_1);
+      shared_ptr<HEPtxt> v_1p = context->createPtxt(v_1);
       AS_LOG_DEBUG << "rotating k=" << static_cast<signed>(k - d) << " "
                    << c_0->to_string() << std::endl;
-      HECtxt* second = c_0->rotate(static_cast<signed>(k - d));
+      shared_ptr<HECtxt> second = c_0->rotate(static_cast<signed>(k - d));
       AS_LOG_DEBUG << "rotated " << c_0->to_string() << std::endl;
       second->multInPlace(v_1p);
       AS_LOG_DEBUG << "masked " << second->to_string() << std::endl;
-      delete v_1p;
 
       // add up the ciphertexts and save result
       first->addInPlace(second);
@@ -150,7 +147,6 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
       ctxts[k - 1] = first;
 
       // clean up
-      delete second;
     }
 
     AS_LOG_DEBUG << "column shifting complete " << std::endl;
@@ -188,41 +184,28 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
     AS_LOG_DEBUG << "rhs transform complete " << std::endl;
 
     // accumulate the result in c_0
-    std::cout
-        << "###########################################\n######################"
-           "##"
-           "###################\n###########################################\n"
-        << std::endl;
     AS_LOG_DEBUG << "accumulating results " << std::endl;
-    HEPtxt* p_0_enc = context->createPtxt(p_0);
+    shared_ptr<HEPtxt> p_0_enc = context->createPtxt(p_0);
     c_0->multInPlace(p_0_enc);
     AS_LOG_DEBUG << "multiplied " << c_0->to_string() << std::endl;
-    delete p_0_enc;
 
     AS_LOG_DEBUG << "no ctxts: " << ctxts.size() << std::endl;
     for (size_t i = 0; i < ctxts.size(); ++i) {
       AS_LOG_DEBUG << "creating ptxt " << std::endl;
-      HEPtxt* p_i = context->createPtxt(ptxts[i]);
+      shared_ptr<HEPtxt> p_i = context->createPtxt(ptxts[i]);
       AS_LOG_DEBUG << "getting ctxt " << std::endl;
-      HECtxt* c_i = ctxts[i];
-      AS_LOG_DEBUG << "got ctxt " << (void*)c_i << " " << c_i->to_string()
+      shared_ptr<HECtxt> c_i = ctxts[i];
+      AS_LOG_DEBUG << "got ctxt " << c_i << " " << c_i->to_string()
                    << std::endl;
       c_i->multInPlace(p_i);
       AS_LOG_DEBUG << "multiplied " << c_i->to_string() << std::endl;
       c_0->addInPlace(c_i);
       AS_LOG_DEBUG << "added " << c_0->to_string() << std::endl;
       // cleanup
-      delete p_i;
-      delete c_i;
-      ctxts[i] = nullptr;
+      ctxts[i].reset();
     }
     AS_LOG_DEBUG << "accumulation complete " << std::endl;
     // cleanup
-    for (auto ptr : ctxts) {
-      if (ptr) {
-        delete ptr;
-      }
-    }
     ctxts.clear();
   } else {
     AS_LOG_DEBUG << "e2dm rectuganlar matrix multiplication" << std::endl;
@@ -238,9 +221,8 @@ Ctxt E2DMLayout::dot(const Ctxt& one, const Ptxt& two) const {
 
   std::stringstream result_name;
   result_name << one.getName() << " X " << two.getName();
-  std::shared_ptr<HECtxt> temp(c_0);
 
-  return Ctxt(std::vector<std::shared_ptr<HECtxt>>{temp}, result_layout,
+  return Ctxt(std::vector<shared_ptr<HECtxt>>{c_0}, result_layout,
               result_name.str());
 }
 

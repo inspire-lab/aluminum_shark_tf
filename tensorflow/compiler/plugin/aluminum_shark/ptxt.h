@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/base_txt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/dbg_ptr.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 
 namespace aluminum_shark {
@@ -27,9 +28,9 @@ class Ptxt : public BaseTxt {
   virtual ~Ptxt(){};
 
   // getters / setters
-  const std::vector<std::shared_ptr<HEPtxt>>& getValue() const;
-  std::vector<std::shared_ptr<HEPtxt>>& getValue();
-  void setValue(std::vector<std::shared_ptr<HEPtxt>>& value_ptr);
+  const std::vector<shared_ptr<HEPtxt>>& getValue() const;
+  std::vector<shared_ptr<HEPtxt>>& getValue();
+  void setValue(std::vector<shared_ptr<HEPtxt>>& value_ptr);
 
   const std::string& getName() const;
   void setName(const std::string& name);
@@ -75,7 +76,7 @@ class Ptxt : public BaseTxt {
   std::vector<long> decodeLong() const;
 
  private:
-  std::vector<std::shared_ptr<HEPtxt>> value_;
+  std::vector<shared_ptr<HEPtxt>> value_;
   std::string name_;
   HEContext* context_;
   const xla::Literal& literal_;

@@ -6,11 +6,18 @@
 #include <memory>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/python/arg_utils.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/parallel.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 // #include <mutex>
 
 namespace {
 static aluminum_shark::Ctxt I_AM_ERROR("I AM ERROR");
+
+const bool parallel =
+    std::getenv("ALUMINUM_SHARK_PARALLEL_ENCRYPTION") == nullptr
+        ? false
+        : std::stoi(std::getenv("ALUMINUM_SHARK_PARALLEL_ENCRYPTION")) == 1;
+
 }  // namespace
 
 namespace aluminum_shark {
@@ -300,10 +307,10 @@ void* aluminum_shark_encryptLong(const long* values, int size, const char* name,
   aluminum_shark::Layout* layout_ =
       aluminum_shark::createLayout(layout, shape_v);
   auto layedout_vec = layout_->layout_vector(ptxt_vec);
-  std::vector<std::shared_ptr<aluminum_shark::HECtxt>> ctxts;
-  for (const auto& v : layedout_vec) {
-    ctxts.push_back(std::shared_ptr<aluminum_shark::HECtxt>(
-        context->context->encrypt(ptxt_vec, name)));
+  std::vector<shared_ptr<aluminum_shark::HECtxt>> ctxts;
+  for (auto& v : layedout_vec) {
+    ctxts.push_back(
+        shared_ptr<aluminum_shark::HECtxt>(context->context->encrypt(v, name)));
   }
 
   aluminum_shark_Ctxt* ret = new aluminum_shark_Ctxt();
@@ -346,10 +353,21 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
       layout->layout_vector(ptxt_vec);
 
   AS_LOG_S << "Input layed out" << std::endl;
-  std::vector<std::shared_ptr<aluminum_shark::HECtxt>> hectxts;
-  for (auto& v : ptxt_with_layout) {
-    hectxts.push_back(std::shared_ptr<aluminum_shark::HECtxt>(
-        context->context->encrypt(v, name)));
+  std::vector<shared_ptr<aluminum_shark::HECtxt>> hectxts;
+  if (parallel) {
+    // running multithreaded encryption
+    hectxts = std::vector<shared_ptr<aluminum_shark::HECtxt>>(
+        ptxt_with_layout.size());
+    auto func = [&ptxt_with_layout, &hectxts, &context, &name](size_t i) {
+      hectxts[i] = shared_ptr<aluminum_shark::HECtxt>(
+          context->context->encrypt(ptxt_with_layout[i], name));
+    };
+    aluminum_shark::run_parallel(0, ptxt_with_layout.size(), func);
+  } else {
+    for (auto& v : ptxt_with_layout) {
+      hectxts.push_back(shared_ptr<aluminum_shark::HECtxt>(
+          context->context->encrypt(v, name)));
+    }
   }
   AS_LOG_S << "Input encrypted" << std::endl;
   // create ctxt and wrap it for python

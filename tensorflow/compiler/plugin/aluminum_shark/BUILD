@@ -36,6 +36,7 @@ cc_library(
     hdrs = [
         "base_txt.h",
         "ctxt.h",
+        "dbg_ptr.h",
         "layout.h",
         "ptxt.h",
     ],
@@ -101,6 +102,7 @@ cc_library(
     srcs = ["ctxt.cc"],
     hdrs = [
         "ctxt.h",
+        "dbg_ptr.h",
     ],
     deps = [
         ":base_txt",

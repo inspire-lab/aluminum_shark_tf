@@ -2753,6 +2753,7 @@ Status AluminumSharkHloEvaluator::Postprocess(HloInstruction* hlo) {
   }
   AS_LOG_DEBUG << "running postprocessing for: " << hlo->ToString()
                << std::endl;
+  std::cout << "running postprocessing for: " << hlo->ToString() << std::endl;
   check_and_free_memory(hlo);
   return Status::OK();
 }
@@ -2849,10 +2850,52 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
   }
   AS_LOG_INFO << "running memory clean up checks for" << hlo->name()
               << std::endl;
+
+  std::cout << "running memory clean up checks for" << hlo->name() << std::endl;
+
+  // iterate over all operands for this hlo
+  for (const auto& op : hlo->operands()) {
+    // check if all user of the operand have been evaluated. if so we can remove
+    // it
+    bool del = op->users().size() != 0;  // if an hlo has no users it might be
+                                         // the root and we can not delete taht
+
+    for (const auto& user_hlo : op->users()) {
+      // if it is in the evaluated_ctxt_ map it was evaluated
+      if (evaluated_ctxt_.find(user_hlo) == evaluated_ctxt_.end()) {
+        del = false;
+        break;
+      }
+    }
+
+    if (del) {
+      // users have been evaluated
+      auto iter = evaluated_ctxt_.find(op);
+      if (iter != evaluated_ctxt_.end()) {
+        std::cout
+            << "-----------------------------------------------------------"
+            << std::endl;
+        std::cout << "deleting ctxt for " << op->name() << std::endl;
+        std::cout << "pointer: " << iter->second.getValue()[0]
+                  << " ref count: " << iter->second.getValue()[0].use_count()
+                  << std::endl;
+        std::vector<shared_ptr<::aluminum_shark::HECtxt>> temp;
+        iter->second.setValue(temp);
+        std::cout
+            << "-----------------------------------------------------------"
+            << std::endl;
+      } else {
+        std::cout << op->name() << " is being weird" << std::endl;
+      }
+    }
+  }
+  return;
+  // perform anaysis of the shared_ptr and who is holding them
+
   // iterate through all key/value pairs and remove hlo from the value set.
-  // if the set is empty we can remove key from dictonary and free up the memory
-  // by deleting the ciphertext
-  // we can't use the range based loop since we are modifying the container
+  // if the set is empty we can remove key from dictonary and free up the
+  // memory by deleting the ciphertext we can't use the range based loop since
+  // we are modifying the container
   for (auto iter = memory_dependencies.begin(), next_iter = iter;
        iter != memory_dependencies.end(); iter = next_iter) {
     ++next_iter;
@@ -2871,6 +2914,7 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
       // remove key from:
       // 1. the dependency map
       memory_dependencies.erase(key);
+
       // 2. the evaluated ciphertexts
       evaluated_ctxt_.erase(key);
     }

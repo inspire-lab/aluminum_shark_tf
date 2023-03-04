@@ -2389,9 +2389,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                        std::vector<size_t>{1}));
     // reduction function
     auto reduce_func = [&](absl::Span<const int64_t> output_index)
-        -> std::shared_ptr<::aluminum_shark::HECtxt> {
+        -> shared_ptr<::aluminum_shark::HECtxt> {
       // accumlates the result in the window
-      std::shared_ptr<::aluminum_shark::HECtxt> computed_result;
+      shared_ptr<::aluminum_shark::HECtxt> computed_result;
       // create a local evaluator so we can multithread this
       AluminumSharkHloEvaluator embedded_evaluator(
           parent_->max_loop_iterations_);
@@ -2409,11 +2409,11 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             }
             // create Ctxts so we can pass it to the embedded_evaluator
             ::aluminum_shark::Ctxt wrapped_result(
-                std::vector<std::shared_ptr<::aluminum_shark::HECtxt>>{
+                std::vector<shared_ptr<::aluminum_shark::HECtxt>>{
                     computed_result},
                 dummy_layout, "lhs dummy");
             ::aluminum_shark::Ctxt wrapped_operand(
-                std::vector<std::shared_ptr<::aluminum_shark::HECtxt>>{
+                std::vector<shared_ptr<::aluminum_shark::HECtxt>>{
                     ctxt->layout().get(operand_index, *ctxt)},
                 dummy_layout, "rhs dummy");
 
@@ -2438,9 +2438,9 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         ::aluminum_shark::createLayout(ctxt->layout().type(),
                                        inferred_return_shape));
     // create return vector
-    std::vector<std::shared_ptr<::aluminum_shark::HECtxt>> result_vec(
+    std::vector<shared_ptr<::aluminum_shark::HECtxt>> result_vec(
         ::aluminum_shark::size_of_shape(result_layout->get_physical_shape()),
-        std::shared_ptr<::aluminum_shark::HECtxt>());
+        shared_ptr<::aluminum_shark::HECtxt>());
     // create return ciphertext
     ::aluminum_shark::Ctxt result_ctxt(result_vec, result_layout,
                                        reduce_window->name());

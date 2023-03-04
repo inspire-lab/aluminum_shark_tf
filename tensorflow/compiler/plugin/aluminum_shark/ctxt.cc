@@ -12,7 +12,7 @@ namespace aluminum_shark {
 
 Ctxt::Ctxt(std::string name) : name_(name) {}
 
-Ctxt::Ctxt(std::vector<std::shared_ptr<HECtxt>> hectxt,
+Ctxt::Ctxt(std::vector<shared_ptr<HECtxt>> hectxt,
            std::shared_ptr<Layout> layout, std::string name)
     : BaseTxt(layout), value_(hectxt), name_(name) {}
 
@@ -22,10 +22,10 @@ Ctxt Ctxt::deepCopy() const {
   Ctxt copy = *this;
   AS_LOG_S << "copy created" << std::endl;
   // create a copy of the stored object
-  std::vector<std::shared_ptr<HECtxt>> hectxt_copy;
+  std::vector<shared_ptr<HECtxt>> hectxt_copy;
   for (auto hectxt : value_) {
     // AS_LOG_S << "copying HECtxt" << std::endl;
-    hectxt_copy.push_back(std::shared_ptr<HECtxt>(hectxt->deepCopy()));
+    hectxt_copy.push_back(shared_ptr<HECtxt>(hectxt->deepCopy()));
   }
   copy.setValue(hectxt_copy);
   // copy layout
@@ -43,13 +43,11 @@ const HEContext* Ctxt::getContext() const {
 
 // getters and setters
 
-const std::vector<std::shared_ptr<HECtxt>>& Ctxt::getValue() const {
-  return value_;
-}
+const std::vector<shared_ptr<HECtxt>>& Ctxt::getValue() const { return value_; }
 
-std::vector<std::shared_ptr<HECtxt>>& Ctxt::getValue() { return value_; }
+std::vector<shared_ptr<HECtxt>>& Ctxt::getValue() { return value_; }
 
-void Ctxt::setValue(std::vector<std::shared_ptr<HECtxt>>& value_ptrs) {
+void Ctxt::setValue(std::vector<shared_ptr<HECtxt>>& value_ptrs) {
   AS_LOG_S << "setting HECtxts for " << name_ << std::endl;
   value_ = value_ptrs;
 }
@@ -203,7 +201,8 @@ std::vector<double> Ctxt::decryptDouble() const {
   AS_LOG_S << "trying to decrypt " << value_.size() << " ciphertexts "
            << std::endl;
   for (const auto& hectxt : value_) {
-    decryptions.push_back(getContext()->decryptDouble(hectxt.get()));
+    decryptions.push_back(
+        getContext()->decryptDouble(to_std_shared_ptr(hectxt)));
   }
   std::vector<double> vec = layout().reverse_layout_vector(decryptions);
   AS_LOG_INFO << "Decrypted Double number of values: " << vec.size()
@@ -219,7 +218,7 @@ std::vector<double> Ctxt::decryptDouble() const {
 std::vector<long> Ctxt::decryptLong() const {
   std::vector<std::vector<long>> decryptions;
   for (const auto& hectxt : value_) {
-    decryptions.push_back(getContext()->decryptLong(hectxt.get()));
+    decryptions.push_back(getContext()->decryptLong(to_std_shared_ptr(hectxt)));
   }
   std::vector<long> vec = layout().reverse_layout_vector(decryptions);
   AS_LOG_S << "Decrypted Long. Values: [ ";

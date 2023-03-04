@@ -2,14 +2,15 @@
 #define ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_CTXT_H
 
 #include <exception>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/base_txt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/dbg_ptr.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
+#include "tensorflow/core/platform/default/stacktrace.h"
 
 namespace aluminum_shark {
 
@@ -22,17 +23,18 @@ class Ctxt : public BaseTxt {
  public:
   // Ctor/Dtor
   Ctxt() = default;
-  //   Ctxt(const Ctxt& other) = default;
-  //   Ctxt(Ctxt&& other) = default;
+  // Ctxt(const Ctxt& other) = default;
+  // Ctxt(Ctxt&& other) = default;
   Ctxt(std::string name);
-  Ctxt(std::vector<std::shared_ptr<HECtxt>> hectxt,
-       std::shared_ptr<Layout> layout, std::string name);
-  virtual ~Ctxt() {}
+  Ctxt(std::vector<shared_ptr<HECtxt>> hectxt, std::shared_ptr<Layout> layout,
+       std::string name);
+
+  virtual ~Ctxt(){};
 
   // getters / setters
-  const std::vector<std::shared_ptr<HECtxt>>& getValue() const;
-  std::vector<std::shared_ptr<HECtxt>>& getValue();
-  void setValue(std::vector<std::shared_ptr<HECtxt>>& value_ptrs);
+  const std::vector<shared_ptr<HECtxt>>& getValue() const;
+  std::vector<shared_ptr<HECtxt>>& getValue();
+  void setValue(std::vector<shared_ptr<HECtxt>>& value_ptrs);
 
   const std::string& getName() const;
   void setName(const std::string& name);
@@ -70,7 +72,7 @@ class Ctxt : public BaseTxt {
   std::vector<long> decryptLong() const;
 
  private:
-  std::vector<std::shared_ptr<HECtxt>> value_;
+  std::vector<shared_ptr<HECtxt>> value_;
   std::string name_;
 };
 

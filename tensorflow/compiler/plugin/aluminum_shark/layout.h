@@ -7,13 +7,12 @@
 #include <string>
 #include <vector>
 
+#include "absl/types/span.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/dbg_ptr.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/he_backend/he_backend.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/parallel.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
-// removes all the depencies to tensorflow, xla and absl. for testing. disables
-// all of functions
-#include "absl/types/span.h"
 #include "tensorflow/compiler/xla/service/hlo_instructions.h"
 #include "tensorflow/compiler/xla/shape.h"
 #include "tensorflow/compiler/xla/shape_util.h"
@@ -167,14 +166,13 @@ class Layout {
   // returns the actual shape of the underlying buffer as an xla::Shape
   virtual xla::Shape get_physical_shape_xla() const;
 
-  virtual std::shared_ptr<HECtxt> get(absl::Span<const int64_t> index,
-                                      Ctxt& ctxt) const;
-  virtual std::shared_ptr<HECtxt> get(size_t index, Ctxt& ctxt) const;
+  virtual shared_ptr<HECtxt> get(absl::Span<const int64_t> index,
+                                 Ctxt& ctxt) const;
+  virtual shared_ptr<HECtxt> get(size_t index, Ctxt& ctxt) const;
 
   virtual void set(absl::Span<const int64_t> index, Ctxt& ctxt,
-                   std::shared_ptr<HECtxt> value) const;
-  virtual void set(size_t index, Ctxt& ctxt,
-                   std::shared_ptr<HECtxt> value) const;
+                   shared_ptr<HECtxt> value) const;
+  virtual void set(size_t index, Ctxt& ctxt, shared_ptr<HECtxt> value) const;
 
   // Operation Interface
   virtual void add_in_place(Ctxt& one, const Ctxt& two) const = 0;
@@ -360,21 +358,22 @@ Shape xla_shape_to_shark_shape(const xla::Shape& shape);
 // one and tow should be std::pair that hold the start and
 // end iterator to the vectors
 template <class T, class U>
-std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
-    const std::pair<T, T>& one, const std::pair<U, U>& two) {
+std::vector<shared_ptr<HECtxt>> simple_dot_helper(const std::pair<T, T>& one,
+                                                  const std::pair<U, U>& two) {
   // perform first multiplication
   auto iter_one = one.first;
   auto iter_two = two.first;
   AS_LOG_S << "starting simple dot" << std::endl;
-  HECtxt* result = **(one.first) * two.first->get();
+  shared_ptr<HECtxt> result = **(one.first) * to_std_shared_ptr(*two.first);
   AS_LOG_S << "starting simple dot" << std::endl;
 #ifdef LAYOUT_DEBUG
   const HEContext* context = result->getContext();
-  AS_LOG_S << "decrypted: " << context->decryptDouble(one.first->get())[0]
-           << " * " << context->decryptDouble(two.first->get())[0] << " = "
+  AS_LOG_S << "decrypted: "
+           << context->decryptDouble(to_std_shared_ptr(one.first))[0] << " * "
+           << context->decryptDouble(two.first)[0] << " = "
            << context->decryptDouble(result)[0] << std::endl;
 #endif
-  // need to increment both iterator;
+  // need to increment both iterators;
   ++iter_one;
   ++iter_two;
   size_t i = 0;
@@ -382,10 +381,10 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
     // need to create a temporary variable so we can free
     // it later
     AS_LOG_S << "performing product" << std::endl;
-    HECtxt* temp = **iter_one * iter_two->get();
+    shared_ptr<HECtxt> temp = **iter_one * to_std_shared_ptr(*iter_two);
 #ifdef LAYOUT_DEBUG
-    AS_LOG_S << "decrypted: " << context->decryptDouble(iter_one->get())[0]
-             << " * " << context->decryptDouble(iter_two->get())[0] << " = "
+    AS_LOG_S << "decrypted: " << context->decryptDouble(iter_one)[0] << " * "
+             << context->decryptDouble(iter_two)[0] << " = "
              << context->decryptDouble(temp)[0] << std::endl;
     AS_LOG_S << "decrypted: " << context->decryptDouble(result)[0] << " + "
              << context->decryptDouble(temp)[0] << " = ";
@@ -394,12 +393,10 @@ std::vector<std::shared_ptr<HECtxt>> simple_dot_helper(
     result->addInPlace(temp);
 #ifdef LAYOUT_DEBUG
     AS_LOG_SA << context->decryptDouble(result)[0] << std::endl;
-#endif
-    // we have taken ownership of the pointer and are now
-    // repsonible for it
-    delete temp;
+#endif /* ALUMINUM_SHARK_DEPENDENCIES_TENSORFLOW_TENSORFLOW_COMPILER_PLUGIN_ALUMINUM_SHARK_LAYOUT_H \
+        */
   }
-  return std::vector<std::shared_ptr<HECtxt>>{std::shared_ptr<HECtxt>(result)};
+  return std::vector<shared_ptr<HECtxt>>{result};
 }
 
 void registerLayout(LAYOUT_TYPE type,

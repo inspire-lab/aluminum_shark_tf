@@ -27,9 +27,9 @@ Ptxt Ptxt::deepCopy() const {
   AS_LOG("creating deep copy of: " + name_);
   Ptxt copy = *this;
   // create a copy of the stored object
-  std::vector<std::shared_ptr<HEPtxt>> heptxt_copy;
+  std::vector<shared_ptr<HEPtxt>> heptxt_copy;
   for (auto heptxt : value_) {
-    heptxt_copy.push_back(std::shared_ptr<HEPtxt>(heptxt->deepCopy()));
+    heptxt_copy.push_back(shared_ptr<HEPtxt>(heptxt->deepCopy()));
   }
   copy.setValue(heptxt_copy);
   // copy layout
@@ -41,16 +41,14 @@ bool Ptxt::is_initialized() const { return value_.size() != 0; }
 
 // getters and setters
 
-const std::vector<std::shared_ptr<HEPtxt>>& Ptxt::getValue() const {
-  return value_;
-}
+const std::vector<shared_ptr<HEPtxt>>& Ptxt::getValue() const { return value_; }
 
-std::vector<std::shared_ptr<HEPtxt>>& Ptxt::getValue() { return value_; }
+std::vector<shared_ptr<HEPtxt>>& Ptxt::getValue() { return value_; }
 
 const std::string& Ptxt::getName() const { return name_; }
 void Ptxt::setName(const std::string& name) { name_ = name; }
 
-void Ptxt::setValue(std::vector<std::shared_ptr<HEPtxt>>& value_ptrs) {
+void Ptxt::setValue(std::vector<shared_ptr<HEPtxt>>& value_ptrs) {
   AS_LOG_S << "setting HEPtxts for " << name_ << std::endl;
   value_ = value_ptrs;
 }
@@ -93,7 +91,7 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
         AS_LOG_DEBUG << v << std::endl;
       }
       // TODO RP: maybe move here
-      value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
+      value_.push_back(shared_ptr<HEPtxt>(context->createPtxt(v)));
     }
   } else if (context->scheme() == HE_SCHEME::BFV) {
     std::vector<long> vec = convertLiteralToPtxt<long>(literal_);
@@ -101,7 +99,7 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout,
     auto vec_with_layout(layout->layout_vector(vec));
     for (const auto& v : vec_with_layout) {
       // TODO RP: maybe move here
-      value_.push_back(std::shared_ptr<HEPtxt>(context->createPtxt(v)));
+      value_.push_back(shared_ptr<HEPtxt>(context->createPtxt(v)));
     }
   } else {
     AS_LOG_CRITICAL << "unexpected scheme type" << std::endl;
@@ -131,8 +129,8 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
   //       layout->layout_vector(decodeDouble());
   //   value_.clear();
   //   for (const auto& ptxt : ptxt_with_layout) {
-  //     std::shared_ptr<HEPtxt> ptxt_ptr(
-  //         std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+  //     shared_ptr<HEPtxt> ptxt_ptr(
+  //         shared_ptr<HEPtxt>(context->encode(ptxt)));
   //     value_.push_back(ptxt_ptr);
   //   }
   // } else if (context->scheme() == HE_SCHEME::BFV) {
@@ -140,8 +138,8 @@ void Ptxt::updateLayout(std::shared_ptr<Layout> layout) {
   //       layout->layout_vector(decodeLong());
   //   value_.clear();
   //   for (const auto& ptxt : ptxt_with_layout) {
-  //     std::shared_ptr<HEPtxt> ptxt_ptr(
-  //         std::shared_ptr<HEPtxt>(context->encode(ptxt)));
+  //     shared_ptr<HEPtxt> ptxt_ptr(
+  //         shared_ptr<HEPtxt>(context->encode(ptxt)));
   //     value_.push_back(ptxt_ptr);
   //   }
   // } else {
@@ -268,7 +266,8 @@ std::vector<double> Ptxt::decodeDouble() const {
   AS_LOG_S << "Decoding double " << std::endl;
   std::vector<std::vector<double>> decodings;
   for (const auto& heptxt : value_) {
-    decodings.push_back(heptxt->getContext()->decodeDouble(heptxt.get()));
+    decodings.push_back(
+        heptxt->getContext()->decodeDouble(to_std_shared_ptr(heptxt)));
   }
   if (layout_) {
     AS_LOG_DEBUG << "layout is " << layout() << std::endl;
@@ -287,7 +286,8 @@ std::vector<double> Ptxt::decodeDouble() const {
 std::vector<long> Ptxt::decodeLong() const {
   std::vector<std::vector<long>> decodings;
   for (const auto& heptxt : value_) {
-    decodings.push_back(heptxt->getContext()->decodeLong(heptxt.get()));
+    decodings.push_back(
+        heptxt->getContext()->decodeLong(to_std_shared_ptr(heptxt)));
   }
   std::vector<long> vec = layout().reverse_layout_vector(decodings);
   AS_LOG_S << "Decoded long. Values: [ ";

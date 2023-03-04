@@ -327,16 +327,16 @@ Ctxt SimpleLayout::dot_internal(const Ctxt& one, const T& two) const {
   const auto& two_v = two.getValue();
 
   // stick beginning and end iterators into a pair
-  auto one_iters = std::make_pair<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
-      one_v.cbegin(), one_v.cend());
+  auto one_iters =
+      std::make_pair<typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+                     typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
+          one_v.cbegin(), one_v.cend());
   auto two_iters =
       std::make_pair<typename std::vector<std::shared_ptr<U>>::const_iterator,
                      typename std::vector<std::shared_ptr<U>>::const_iterator>(
           two_v.cbegin(), two_v.cend());
   auto result_ctxts = simple_dot_helper<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
+      typename std::vector<shared_ptr<HECtxt>>::const_iterator,
       typename std::vector<std::shared_ptr<U>>::const_iterator>(one_iters,
                                                                 two_iters);
   std::stringstream result_name;
@@ -389,7 +389,7 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   AS_LOG_S << "extracting columns done" << std::endl;
 
   // create the result vector
-  std::vector<std::shared_ptr<HECtxt>> result_ctxts;
+  std::vector<shared_ptr<HECtxt>> result_ctxts;
   result_ctxts.reserve(result_layout->size());
 
   // perform matrix multiplication
@@ -402,8 +402,8 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   for (size_t i = 0; i < result_shape[0]; ++i) {
     // columns are the inner loop so we can simply use pushback
     auto row_iter = std::make_pair<
-        typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-        typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
+        typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+        typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
         one_v.begin() + i * one_cols, one_v.begin() + i * one_cols + one_cols);
     AS_LOG_S << "row " << i << " [" << i * n_cols << " : "
              << i * one_cols + one_cols << "]" << std::endl;
@@ -415,7 +415,7 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
       AS_LOG_S << "col " << j << std::endl;
       result_ctxts.push_back(
           simple_dot_helper<
-              typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
+              typename std::vector<shared_ptr<HECtxt>>::const_iterator,
               typename std::vector<std::shared_ptr<U>>::const_iterator>(
               row_iter, column_iter)[0]);
     }
@@ -744,7 +744,7 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   Layout* layout =
       createLayout(LAYOUT_TYPE::SIMPLE, xla_shape_to_shark_shape(result_shape));
 
-  std::vector<std::shared_ptr<HECtxt>> ctxt_vector(layout->size());
+  std::vector<shared_ptr<HECtxt>> ctxt_vector(layout->size());
   // populate the ctxt vector
   std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
   std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
@@ -760,7 +760,7 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
        &func](const absl::Span<const int64_t> multi_index) {
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             result_shape, multi_index);
-        ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        ctxt_vector[linear_index] = shared_ptr<HECtxt>(func(multi_index));
 #ifdef LAYOUT_DEBUG
         return true;
 #endif
@@ -1066,16 +1066,16 @@ Ctxt BatchLayout::dot_internal(const Ctxt& one, const T& two) const {
   const auto& two_v = two.getValue();
 
   // stick beginning and end iterators into a pair
-  auto one_iters = std::make_pair<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
-      one_v.cbegin(), one_v.cend());
+  auto one_iters =
+      std::make_pair<typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+                     typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
+          one_v.cbegin(), one_v.cend());
   auto two_iters =
       std::make_pair<typename std::vector<std::shared_ptr<U>>::const_iterator,
                      typename std::vector<std::shared_ptr<U>>::const_iterator>(
           two_v.cbegin(), two_v.cend());
   auto result_ctxts = simple_dot_helper<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
+      typename std::vector<shared_ptr<HECtxt>>::const_iterator,
       typename std::vector<std::shared_ptr<U>>::const_iterator>(one_iters,
                                                                 two_iters);
   std::stringstream result_name;
@@ -1210,7 +1210,7 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   std::shared_ptr<Layout> result_layout(
       createLayout(LAYOUT_TYPE::BATCH, result_shape));
   // create the result vector
-  std::vector<std::shared_ptr<HECtxt>> result_ctxts(two.shape()[1]);
+  std::vector<shared_ptr<HECtxt>> result_ctxts(two.shape()[1]);
 
   // create a "fake" for the output to iterate over. in this shape we'll
   // set the batch dimension to 1
@@ -1231,7 +1231,7 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
        &func](const absl::Span<const int64_t> multi_index) {
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             fake_shape, multi_index);
-        result_ctxts[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        result_ctxts[linear_index] = shared_ptr<HECtxt>(func(multi_index));
 #ifdef LAYOUT_DEBUG
         return true;
 #endif
@@ -1524,8 +1524,8 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   Layout* layout =
       createLayout(LAYOUT_TYPE::BATCH, xla_shape_to_shark_shape(hlo->shape()));
 
-  std::vector<std::shared_ptr<HECtxt>> ctxt_vector(layout->size() /
-                                                   layout->shape()[0]);
+  std::vector<shared_ptr<HECtxt>> ctxt_vector(layout->size() /
+                                              layout->shape()[0]);
   // populate the ctxt vector
   AS_LOG_S << "created result vector with " << ctxt_vector.size() << " elements"
            << std::endl;
@@ -1551,7 +1551,7 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                                               result_shape.dimensions().end())
                       << std::endl;
         }
-        ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        ctxt_vector[linear_index] = shared_ptr<HECtxt>(func(multi_index));
       });
 
   return Ctxt(ctxt_vector, std::shared_ptr<Layout>(layout),

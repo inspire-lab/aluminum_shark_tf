@@ -129,12 +129,12 @@ xla::Shape Layout::get_physical_shape_xla() const {
   return create_xla_dummy_shape(get_physical_shape());
 };
 
-std::shared_ptr<HECtxt> Layout::get(size_t index, Ctxt& ctxt) const {
+shared_ptr<HECtxt> Layout::get(size_t index, Ctxt& ctxt) const {
   return ctxt.getValue()[index];
 }
 
-std::shared_ptr<HECtxt> Layout::get(absl::Span<const int64_t> index,
-                                    Ctxt& ctxt) const {
+shared_ptr<HECtxt> Layout::get(absl::Span<const int64_t> index,
+                               Ctxt& ctxt) const {
   if (!check_index(index, get_physical_shape())) {
     AS_LOG_CRITICAL << "Incompatible index "
                     << IterablePrintWrapper<absl::Span<const int64_t>>(index)
@@ -147,7 +147,7 @@ std::shared_ptr<HECtxt> Layout::get(absl::Span<const int64_t> index,
   return get(multi_index_to_flat(index, get_physical_shape()), ctxt);
 }
 void Layout::set(absl::Span<const int64_t> index, Ctxt& ctxt,
-                 std::shared_ptr<HECtxt> value) const {
+                 shared_ptr<HECtxt> value) const {
   if (!check_index(index, get_physical_shape())) {
     AS_LOG_CRITICAL << "Incompatible index "
                     << IterablePrintWrapper<absl::Span<const int64_t>>(index)
@@ -163,8 +163,7 @@ void Layout::set(absl::Span<const int64_t> index, Ctxt& ctxt,
   set(multi_index_to_flat(index, get_physical_shape()), ctxt, value);
 }
 
-void Layout::set(size_t index, Ctxt& ctxt,
-                 std::shared_ptr<HECtxt> value) const {
+void Layout::set(size_t index, Ctxt& ctxt, shared_ptr<HECtxt> value) const {
   AS_LOG_DEBUG << "Setting at ciphertext at " << index << std::endl;
   ctxt.getValue()[index] = value;
 }
@@ -200,7 +199,7 @@ void SimpleLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
            << " += " << two_v.size() << std::endl;
 
   for (size_t i = 0; i < size_; ++i) {
-    one_v[i]->addInPlace(two_v[i].get());
+    one_v[i]->addInPlace(to_std_shared_ptr(two_v[i]));
   }
   AS_LOG_S << "add in place done " << std::endl;
 }
@@ -210,7 +209,7 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
            << " value sizes: " << one.getValue().size() << " and "
            << two.getValue().size() << std::endl;
   for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two.getValue()[i].get());
+    one.getValue()[i]->multInPlace(to_std_shared_ptr(two.getValue()[i]));
   }
 }
 
@@ -227,7 +226,7 @@ void SimpleLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
     for (size_t i = 0; i < size_; ++i) {
       AS_LOG_S << "ctxt: " << one_v[i]->to_string() << std::endl;
       AS_LOG_S << "ptxt: " << two_v[i]->to_string() << std::endl;
-      one_v[i]->addInPlace(two_v[i].get());
+      one_v[i]->addInPlace(to_std_shared_ptr(two_v[i]));
     }
   } catch (const std::exception& e) {
     AS_LOG_S << "add Inplace failed reason: " << e.what() << std::endl;
@@ -251,7 +250,7 @@ void SimpleLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
   copy.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
   const auto& two_v = copy.getValue();
   for (size_t i = 0; i < size_; ++i) {
-    one.getValue()[i]->multInPlace(two_v[i].get());
+    one.getValue()[i]->multInPlace(to_std_shared_ptr(two_v[i]));
   }
 }
 
@@ -338,18 +337,18 @@ Ctxt SimpleLayout::dot_internal(const Ctxt& one, const T& two) const {
   const auto& two_v = two.getValue();
 
   // stick beginning and end iterators into a pair
-  auto one_iters = std::make_pair<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
-      one_v.cbegin(), one_v.cend());
+  auto one_iters =
+      std::make_pair<typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+                     typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
+          one_v.cbegin(), one_v.cend());
   auto two_iters =
-      std::make_pair<typename std::vector<std::shared_ptr<U>>::const_iterator,
-                     typename std::vector<std::shared_ptr<U>>::const_iterator>(
+      std::make_pair<typename std::vector<shared_ptr<U>>::const_iterator,
+                     typename std::vector<shared_ptr<U>>::const_iterator>(
           two_v.cbegin(), two_v.cend());
   auto result_ctxts = simple_dot_helper<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<U>>::const_iterator>(one_iters,
-                                                                two_iters);
+      typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+      typename std::vector<shared_ptr<U>>::const_iterator>(one_iters,
+                                                           two_iters);
   std::stringstream result_name;
   result_name << one.getName() << " dot " << two.getName();
   return Ctxt(result_ctxts, result_layout, result_name.str());
@@ -381,15 +380,15 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
       createLayout(LAYOUT_TYPE::SIMPLE, result_shape));
 
   const auto& one_v = one.getValue();
-  const std::vector<std::shared_ptr<U>>& two_v = two.getValue();
+  const std::vector<shared_ptr<U>>& two_v = two.getValue();
   size_t n_rows = two.shape()[0];
   size_t n_cols = two.shape()[1];
   // extract columns from two
   AS_LOG_S << "extracting columns; n_cols " << n_cols << " n_rows " << n_rows
            << std::endl;
-  std::vector<std::vector<std::shared_ptr<U>>> cols;
+  std::vector<std::vector<shared_ptr<U>>> cols;
   for (size_t i = 0; i < n_cols; ++i) {
-    std::vector<std::shared_ptr<U>> col;
+    std::vector<shared_ptr<U>> col;
     for (size_t j = 0; j < n_rows; ++j) {
       AS_LOG_S << "i " << i << " j  " << j << std::endl;
       AS_LOG_S << i + j * n_cols << std::endl;
@@ -400,7 +399,7 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   AS_LOG_S << "extracting columns done" << std::endl;
 
   // create the result vector
-  std::vector<std::shared_ptr<HECtxt>> result_ctxts;
+  std::vector<shared_ptr<HECtxt>> result_ctxts;
   result_ctxts.reserve(result_layout->size());
 
   // perform matrix multiplication
@@ -413,21 +412,21 @@ Ctxt SimpleLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   for (size_t i = 0; i < result_shape[0]; ++i) {
     // columns are the inner loop so we can simply use pushback
     auto row_iter = std::make_pair<
-        typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-        typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
+        typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+        typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
         one_v.begin() + i * one_cols, one_v.begin() + i * one_cols + one_cols);
     AS_LOG_S << "row " << i << " [" << i * n_cols << " : "
              << i * one_cols + one_cols << "]" << std::endl;
     for (size_t j = 0; j < result_shape[1]; ++j) {
-      auto column_iter = std::make_pair<
-          typename std::vector<std::shared_ptr<U>>::const_iterator,
-          typename std::vector<std::shared_ptr<U>>::const_iterator>(
-          cols[j].begin(), cols[j].end());
+      auto column_iter =
+          std::make_pair<typename std::vector<shared_ptr<U>>::const_iterator,
+                         typename std::vector<shared_ptr<U>>::const_iterator>(
+              cols[j].begin(), cols[j].end());
       AS_LOG_S << "col " << j << std::endl;
       result_ctxts.push_back(
           simple_dot_helper<
-              typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-              typename std::vector<std::shared_ptr<U>>::const_iterator>(
+              typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+              typename std::vector<shared_ptr<U>>::const_iterator>(
               row_iter, column_iter)[0]);
     }
   }
@@ -558,7 +557,7 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
         dnums.kernel_spatial_dimensions_size(), 0);
 
     bool first = true;
-    HECtxt* result = nullptr;
+    shared_ptr<HECtxt> result;
 
     // Convolve input feature with kernel.
     // The mechanism indexes into the correct LHS (input) and RHS (kernel)
@@ -635,14 +634,13 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
             out_index[output_z_dim] * rhs_dim_multipliers[kernel_output_z_dim];
         rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
 
-        HECtxt* temp =
-            *(lhs_v[lhs_linear_index]) * rhs_v[rhs_linear_index].get();
+        shared_ptr<HECtxt> temp =
+            *(lhs_v[lhs_linear_index]) * rhs_v[rhs_linear_index];
         if (first) {
           result = temp;
           first = false;
         } else {
           result->addInPlace(temp);
-          delete temp;
         }
       }
     cnt : {}
@@ -656,7 +654,7 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   Layout* layout =
       createLayout(LAYOUT_TYPE::SIMPLE, xla_shape_to_shark_shape(result_shape));
 
-  std::vector<std::shared_ptr<HECtxt>> ctxt_vector(layout->size());
+  std::vector<shared_ptr<HECtxt>> ctxt_vector(layout->size());
   // populate the ctxt vector
   std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
   std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
@@ -667,7 +665,7 @@ Ctxt SimpleLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
        &func](const absl::Span<const int64_t> multi_index) {
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             result_shape, multi_index);
-        ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        ctxt_vector[linear_index] = shared_ptr<HECtxt>(func(multi_index));
       });
 
   Ctxt result(ctxt_vector, std::shared_ptr<Layout>(layout),
@@ -705,7 +703,7 @@ Ctxt SimpleLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
     size *= dim;
   }
   // create return vector and fill it with nullpointers
-  std::vector<std::shared_ptr<HECtxt>> res_vec(size, std::shared_ptr<HECtxt>());
+  std::vector<shared_ptr<HECtxt>> res_vec(size, shared_ptr<HECtxt>());
 
   // copy over the values we need
   std::vector<int64_t> input_index(lhs.shape().size(), 0);
@@ -734,8 +732,7 @@ Ctxt SimpleLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
     // flat indices
     size_t target_index_f = multi_index_to_flat(target_index, shark_shape);
     size_t input_index_f = multi_index_to_flat(input_index, lhs.shape());
-    res_vec[target_index_f] =
-        std::shared_ptr<HECtxt>(lhs.getValue()[input_index_f]->deepCopy());
+    res_vec[target_index_f] = lhs.getValue()[input_index_f]->deepCopy();
     return true;
   };
 
@@ -751,8 +748,8 @@ Ctxt SimpleLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
   std::vector<double> pad_vec{pad_value};
   for (size_t i = 0; res_vec.size(); ++i) {
     if (!res_vec[i]) {
-      res_vec[i] = std::shared_ptr<HECtxt>(
-          lhs.getContext()->encrypt(pad_vec, "padding"));
+      res_vec[i] =
+          shared_ptr<HECtxt>(lhs.getContext()->encrypt(pad_vec, "padding"));
     }
   }
   // create and return padded ciphertext
@@ -825,7 +822,7 @@ void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
     throw std::runtime_error("incompatbile shapes");
   }
   for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->addInPlace(two.getValue()[i].get());
+    one.getValue()[i]->addInPlace(to_std_shared_ptr(two.getValue()[i]));
   }
 }
 
@@ -846,7 +843,7 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 
   // create function to run in prallel
   auto func = [&one_v, &two_v](size_t i) {
-    one_v[i]->multInPlace(two_v[i].get());
+    one_v[i]->multInPlace(to_std_shared_ptr(two_v[i]));
   };
   run_parallel(0, one_v.size(), func);
   AS_LOG_INFO << "multiplying done " << std::endl;
@@ -868,7 +865,7 @@ void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
   }
   // create function to run in prallel
   auto func = [&one_v, &two_v](size_t i) {
-    one_v[i]->addInPlace(two_v[i].get());
+    one_v[i]->addInPlace(to_std_shared_ptr(two_v[i]));
   };
   AS_LOG_INFO << "running parallel inplace addition" << std::endl;
   run_parallel(0, one_v.size(), func);
@@ -886,7 +883,7 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
     throw std::runtime_error("incompatbile shapes");
   }
   for (size_t i = 0; i < one_v.size(); ++i) {
-    one_v[i]->multInPlace(two_v[i].get());
+    one_v[i]->multInPlace(to_std_shared_ptr(two_v[i]));
   }
 }
 
@@ -987,18 +984,18 @@ Ctxt BatchLayout::dot_internal(const Ctxt& one, const T& two) const {
   const auto& two_v = two.getValue();
 
   // stick beginning and end iterators into a pair
-  auto one_iters = std::make_pair<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator>(
-      one_v.cbegin(), one_v.cend());
+  auto one_iters =
+      std::make_pair<typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+                     typename std::vector<shared_ptr<HECtxt>>::const_iterator>(
+          one_v.cbegin(), one_v.cend());
   auto two_iters =
-      std::make_pair<typename std::vector<std::shared_ptr<U>>::const_iterator,
-                     typename std::vector<std::shared_ptr<U>>::const_iterator>(
+      std::make_pair<typename std::vector<shared_ptr<U>>::const_iterator,
+                     typename std::vector<shared_ptr<U>>::const_iterator>(
           two_v.cbegin(), two_v.cend());
   auto result_ctxts = simple_dot_helper<
-      typename std::vector<std::shared_ptr<HECtxt>>::const_iterator,
-      typename std::vector<std::shared_ptr<U>>::const_iterator>(one_iters,
-                                                                two_iters);
+      typename std::vector<shared_ptr<HECtxt>>::const_iterator,
+      typename std::vector<shared_ptr<U>>::const_iterator>(one_iters,
+                                                           two_iters);
   std::stringstream result_name;
   result_name << one.getName() << " dot " << two.getName();
   return Ctxt(result_ctxts, result_layout, result_name.str());
@@ -1043,7 +1040,7 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
     // here
     size_t n_iter = lhs_shape[1];
 
-    HECtxt* result = nullptr;
+    shared_ptr<HECtxt> result;
     for (size_t i = 0; i < n_iter; ++i) {
       // iterate over the colmuns of lhs and rows of lhs
       lhs_index[1] = i;
@@ -1054,19 +1051,20 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
                    << " , rhs_v.size() = " << rhs_v.size()
                    << " index: " << multi_index_to_flat(rhs_index, rhs_shape)
                    << std::endl;
-      HECtxt* temp = *(lhs_v[multi_index_to_flat(lhs_index, lhs_shape)]) *
-                     rhs_v[multi_index_to_flat(rhs_index, rhs_shape)].get();
+      shared_ptr<HECtxt> temp =
+          *(lhs_v[multi_index_to_flat(lhs_index, lhs_shape)]) *
+          to_std_shared_ptr(rhs_v[multi_index_to_flat(rhs_index, rhs_shape)]);
 #ifdef LAYOUT_DEBUG
       // decrypt values
       const HEContext* context = temp->getContext();
       AS_LOG_S << "decypting temp" << std::endl;
       std::vector<double> temp_dec = context->decryptDouble(temp);
       try {
-        HEPtxt* ptxt_p = dynamic_cast<HEPtxt*>(
-            rhs_v[multi_index_to_flat(rhs_index, rhs_shape)].get());
+        std::shared_ptr<HEPtxt> ptxt_p = std::dynamic_pointer_cast<HEPtxt>(
+            rhs_v[multi_index_to_flat(rhs_index, rhs_shape)]);
         AS_LOG_S << "decypting lhs" << std::endl;
         std::vector<double> lhs_dec = context->decryptDouble(
-            lhs_v[multi_index_to_flat(lhs_index, lhs_shape)].get());
+            lhs_v[multi_index_to_flat(lhs_index, lhs_shape)]);
         AS_LOG_S << "decypting rhs" << std::endl;
         std::vector<double> rhs_dec = context->decodeDouble(ptxt_p);
         AS_LOG_S << "decrypted: \n "
@@ -1111,7 +1109,6 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
                  << " = \n ";
 #endif
         result->addInPlace(temp);
-        delete temp;
 #ifdef LAYOUT_DEBUG
         result_dec = context->decryptDouble(result);
         AS_LOG_SA << PrintWithShape<double>(
@@ -1131,7 +1128,7 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   std::shared_ptr<Layout> result_layout(
       createLayout(LAYOUT_TYPE::BATCH, result_shape));
   // create the result vector
-  std::vector<std::shared_ptr<HECtxt>> result_ctxts(two.shape()[1]);
+  std::vector<shared_ptr<HECtxt>> result_ctxts(two.shape()[1]);
 
   // create a "fake" for the output to iterate over. in this shape we'll
   // set the batch dimension to 1
@@ -1152,7 +1149,7 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
        &func](const absl::Span<const int64_t> multi_index) {
         auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
             fake_shape, multi_index);
-        result_ctxts[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        result_ctxts[linear_index] = shared_ptr<HECtxt>(func(multi_index));
 #ifdef LAYOUT_DEBUG
         return true;
 #endif
@@ -1304,7 +1301,7 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
         dnums.kernel_spatial_dimensions_size(), 0);
 
     bool first = true;
-    HECtxt* result = nullptr;
+    shared_ptr<HECtxt> result;
 
     // Convolve input feature with kernel.
     // The mechanism indexes into the correct LHS (input) and RHS (kernel)
@@ -1380,21 +1377,18 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
         rhs_linear_index +=
             out_index[output_z_dim] * rhs_dim_multipliers[kernel_output_z_dim];
         rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
-
-        HECtxt* temp =
-            lhs_v[lhs_linear_index]->operator*(rhs_v[rhs_linear_index].get());
+        shared_ptr<HECtxt> temp =
+            lhs_v[lhs_linear_index]->operator*(rhs_v[rhs_linear_index]);
         if (first) {
           result = temp;
           first = false;
         } else {
           result->addInPlace(temp);
-          delete temp;
         }
       }
     cnt : {}
     } while (xla::IndexUtil::BumpIndices(window_shape,
                                          absl::MakeSpan(rhs_spatial_index)));
-
     return result;
   };
 
@@ -1402,8 +1396,8 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
   Layout* layout =
       createLayout(LAYOUT_TYPE::BATCH, xla_shape_to_shark_shape(hlo->shape()));
 
-  std::vector<std::shared_ptr<HECtxt>> ctxt_vector(layout->size() /
-                                                   layout->shape()[0]);
+  std::vector<shared_ptr<HECtxt>> ctxt_vector(layout->size() /
+                                              layout->shape()[0]);
   // populate the ctxt vector
   AS_LOG_S << "created result vector with " << ctxt_vector.size() << " elements"
            << std::endl;
@@ -1429,7 +1423,7 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
                                               result_shape.dimensions().end())
                       << std::endl;
         }
-        ctxt_vector[linear_index] = std::shared_ptr<HECtxt>(func(multi_index));
+        ctxt_vector[linear_index] = func(multi_index);
       });
 
   return Ctxt(ctxt_vector, std::shared_ptr<Layout>(layout),
@@ -1446,7 +1440,7 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
   }
   // create return vector and fill it with nullpointers
   AS_LOG_DEBUG << "Creating result vector" << std::endl;
-  std::vector<std::shared_ptr<HECtxt>> res_vec(size, std::shared_ptr<HECtxt>());
+  std::vector<shared_ptr<HECtxt>> res_vec(size, shared_ptr<HECtxt>());
 
   // copy over the values we need
   std::vector<int64_t> input_index(lhs.shape().size(), 0);
@@ -1488,8 +1482,7 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
                  << IterablePrintWrapper<absl::Span<const int64_t>>(
                         target_index)
                  << "(" << target_index_f << ")" << std::endl;
-    res_vec[target_index_f] =
-        std::shared_ptr<HECtxt>(lhs.getValue()[input_index_f]->deepCopy());
+    res_vec[target_index_f] = lhs.getValue()[input_index_f]->deepCopy();
     return true;
   };
 
@@ -1515,8 +1508,8 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
                    << res_vec.size() << std::endl;
       AS_LOG_DEBUG << "context " << (const void*)(lhs.getContext())
                    << std::endl;
-      res_vec[i] = std::shared_ptr<HECtxt>(
-          lhs.getContext()->encrypt(pad_vec, "padding"));
+      res_vec[i] =
+          shared_ptr<HECtxt>(lhs.getContext()->encrypt(pad_vec, "padding"));
     }
   }
   // create and return padded ciphertext
