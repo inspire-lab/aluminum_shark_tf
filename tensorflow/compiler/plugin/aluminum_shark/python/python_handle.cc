@@ -104,6 +104,9 @@ std::vector<Ctxt> ComputationHandle::getCiphertTexts() {
     aluminum_shark_Ctxt* as_ctxt =
         reinterpret_cast<aluminum_shark_Ctxt*>(input_array[i]);
     ret.push_back(as_ctxt->ctxt.operator*());
+    if (clear_memory_) {
+      delete as_ctxt;
+    }
   }
   return ret;
 }

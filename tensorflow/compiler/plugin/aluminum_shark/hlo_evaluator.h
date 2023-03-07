@@ -452,9 +452,6 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
   // dealt with
   std::map<size_t, ::aluminum_shark::Ctxt> arg_ctxts_;
 
-  // args can come in two flavors. ptxt and ctxt
-  std::map<size_t, ::aluminum_shark::Ptxt> arg_ptxts_;
-
   // Use fast path that uses eigen in the evaluator.
   bool use_fast_path_ = false;
 

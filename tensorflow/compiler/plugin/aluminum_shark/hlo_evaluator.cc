@@ -2908,6 +2908,19 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
         iter->second.setValue(temp);
       } else {
         AS_LOG_DEBUG << op->name() << " is being weird" << std::endl;
+        // check if the hlo is a parameter, if so we need to also delete it from
+        // the arguments
+        if (op->opcode() == HloOpcode::kParameter) {
+          // check if the parameter is a plaintext or ciphertext
+          AS_LOG_INFO << "Deleting parameter." << std::endl;
+          auto it_c = arg_ctxts_.find(op->parameter_number());
+          if (it_c != arg_ctxts_.end()) {
+            AS_LOG_INFO << "Found Ctxt: " << it_c->first << " "
+                        << it_c->second.getName() << " deleting it"
+                        << std::endl;
+            arg_ctxts_.erase(it_c);
+          }
+        }
       }
     }
   }
