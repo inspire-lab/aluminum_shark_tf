@@ -282,7 +282,6 @@ Ctxt E2DMLayout::reshape(Ctxt& lhs, const Shape& shape) const { return lhs; };
 // register  layout
 static bool init = [] {
   AS_LOG_DEBUG << "E2DM layout registerd" << std::endl;
-  std::cout << "E2DM layout registerd" << std::endl;
   // create factory function
   auto factory = [](const Shape& shape) { return new E2DMLayout(shape); };
   registerLayout(LAYOUT_TYPE::E2DM, factory);
