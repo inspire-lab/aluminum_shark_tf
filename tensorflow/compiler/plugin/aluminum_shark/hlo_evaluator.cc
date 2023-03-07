@@ -2738,6 +2738,22 @@ Status AluminumSharkHloEvaluator::HandleCustomCall(
 Status AluminumSharkHloEvaluator::Preprocess(HloInstruction* hlo) {
   VLOG(2) << "About to visit HLO: " << hlo->ToString();
   AS_LOG_INFO << "About to visit HLO: " << hlo->ToString() << std::endl;
+  if (computation_handle_) {
+    AS_LOG_DEBUG << "calling start_operation_callback " << std::endl;
+    computation_handle_->start_operation_callback(hlo->name());
+    AS_LOG_DEBUG << "done" << std::endl;
+    if (ressource_monitor_) {
+      std::string name;
+      double value;
+      AS_LOG_DEBUG << "querying ressource monitor" << std::endl;
+      while (ressource_monitor_->get_next(name, value)) {
+        AS_LOG_DEBUG << "got: " << name << "=" << value << std::endl;
+        std::cout << "got: " << name << "=" << value << std::endl;
+        computation_handle_->log_value_callback(name, value);
+      }
+      AS_LOG_DEBUG << "done" << std::endl;
+    }
+  }
   return ShapeUtil::ValidateShape(hlo->shape());
 }
 
@@ -2753,8 +2769,22 @@ Status AluminumSharkHloEvaluator::Postprocess(HloInstruction* hlo) {
   }
   AS_LOG_DEBUG << "running postprocessing for: " << hlo->ToString()
                << std::endl;
-  std::cout << "running postprocessing for: " << hlo->ToString() << std::endl;
   check_and_free_memory(hlo);
+  if (computation_handle_) {
+    AS_LOG_DEBUG << "calling end_operation_callback " << std::endl;
+    computation_handle_->end_operation_callback(hlo->name());
+    AS_LOG_DEBUG << "done" << std::endl;
+    if (ressource_monitor_) {
+      std::string name;
+      double value;
+      AS_LOG_DEBUG << "querying ressource monitor" << std::endl;
+      while (ressource_monitor_->get_next(name, value)) {
+        AS_LOG_DEBUG << "got: " << name << "=" << value << std::endl;
+        computation_handle_->log_value_callback(name, value);
+      }
+      AS_LOG_DEBUG << "done" << std::endl;
+    }
+  }
   return Status::OK();
 }
 
@@ -2851,8 +2881,6 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
   AS_LOG_INFO << "running memory clean up checks for" << hlo->name()
               << std::endl;
 
-  std::cout << "running memory clean up checks for" << hlo->name() << std::endl;
-
   // iterate over all operands for this hlo
   for (const auto& op : hlo->operands()) {
     // check if all user of the operand have been evaluated. if so we can remove
@@ -2872,51 +2900,15 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
       // users have been evaluated
       auto iter = evaluated_ctxt_.find(op);
       if (iter != evaluated_ctxt_.end()) {
-        std::cout
-            << "-----------------------------------------------------------"
-            << std::endl;
-        std::cout << "deleting ctxt for " << op->name() << std::endl;
-        std::cout << "pointer: " << iter->second.getValue()[0]
-                  << " ref count: " << iter->second.getValue()[0].use_count()
-                  << std::endl;
+        AS_LOG_DEBUG << "deleting ctxt for " << op->name() << std::endl;
+        AS_LOG_DEBUG << "pointer: " << iter->second.getValue()[0]
+                     << " ref count: " << iter->second.getValue()[0].use_count()
+                     << std::endl;
         std::vector<shared_ptr<::aluminum_shark::HECtxt>> temp;
         iter->second.setValue(temp);
-        std::cout
-            << "-----------------------------------------------------------"
-            << std::endl;
       } else {
-        std::cout << op->name() << " is being weird" << std::endl;
+        AS_LOG_DEBUG << op->name() << " is being weird" << std::endl;
       }
-    }
-  }
-  return;
-  // perform anaysis of the shared_ptr and who is holding them
-
-  // iterate through all key/value pairs and remove hlo from the value set.
-  // if the set is empty we can remove key from dictonary and free up the
-  // memory by deleting the ciphertext we can't use the range based loop since
-  // we are modifying the container
-  for (auto iter = memory_dependencies.begin(), next_iter = iter;
-       iter != memory_dependencies.end(); iter = next_iter) {
-    ++next_iter;
-    // get the set of operations and remove hlo
-    const HloInstruction* key = iter->first;
-    auto& op_set = iter->second;
-    // std::cout << "\t " << key->name() << " required for: ";
-    // for (auto op : op_set) {
-    //   std::cout << op->name() << ", ";
-    // }
-    // std::cout << std::endl;
-    op_set.erase(hlo);
-
-    if (op_set.empty()) {
-      AS_LOG_INFO << "clearing memory for " << key->name() << std::endl;
-      // remove key from:
-      // 1. the dependency map
-      memory_dependencies.erase(key);
-
-      // 2. the evaluated ciphertexts
-      evaluated_ctxt_.erase(key);
     }
   }
 }

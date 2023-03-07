@@ -46,6 +46,7 @@ enum HE_SCHEME { BFV = 0, CKKS, TFHE };
 class HEContext;
 class HECtxt;
 class HEPtxt;
+class Monitor;
 
 // This class wraps around an externally implemented HE backend. The backend is
 // implmented in its own shared library which is loaded dynamically. The backend
@@ -70,6 +71,11 @@ class HEBackend {
   virtual const API_VERSION& api_version() = 0;
 
   virtual void set_log_level(int level) = 0;
+
+  // enables or disables the moniotr. can return nullptr. enabling an already
+  // enabled moitor reutrns the same pointer and does not create a new one
+  virtual std::shared_ptr<Monitor> enable_ressource_monitor(bool) const = 0;
+  virtual std::shared_ptr<Monitor> get_ressource_monitor() const = 0;
 
  private:
   std::shared_ptr<void> lib_handle_;
@@ -188,6 +194,9 @@ class HECtxt {
       const std::shared_ptr<HECtxt> other) = 0;
   virtual void multInPlace(const std::shared_ptr<HECtxt> other) = 0;
 
+  // returns the size of the ciphertext in bytes
+  virtual size_t size() = 0;
+
   // ctxt and plain
 
   // addition
@@ -220,6 +229,22 @@ class HECtxt {
 
  private:
   friend HEContext;
+};
+
+// A class to monitor the ressource consumption of the backend.
+class Monitor {
+ public:
+  // retrieves the value specified by name and writes it into value, returns
+  // false if the value is not logged or unsoproted;
+  virtual bool get(const std::string& name, double& value) = 0;
+
+  // can be used to iterate over all logged valued by this monitor. puts the
+  // name of the value into `name` and the value into `value`. Returns false if
+  // there are no more values. Calling it again after that restarts
+  virtual bool get_next(std::string& name, double& value) = 0;
+
+  // returns a list of all values supported by this monitor
+  virtual const std::vector<std::string>& values() = 0;
 };
 
 std::shared_ptr<HEBackend> loadBackend(const std::string& lib_path);

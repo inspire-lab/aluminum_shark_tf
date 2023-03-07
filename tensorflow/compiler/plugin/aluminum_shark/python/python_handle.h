@@ -13,19 +13,19 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 
-/*
- * Singleton Class that keeps track of c++ objects accessed via python.
- */
-
 namespace aluminum_shark {
 
 class ComputationHandle {
  public:
   ComputationHandle(void* (*ctxt_callback)(int*),
                     void (*result_callback)(void*, int),
+                    void (*monitor_value_callback)(const char*, double),
+                    void (*monitor_progress_callback)(const char*, bool),
                     const char* forced_layout, bool clear_memory)
       : ctxt_callback_(ctxt_callback),
         result_callback_(result_callback),
+        monitor_value_callback_(monitor_value_callback),
+        monitor_progress_callback_(monitor_progress_callback),
         forced_layout_(forced_layout),
         clear_memory_(clear_memory){};
 
@@ -34,6 +34,11 @@ class ComputationHandle {
 
   // retrieve the result of the computation
   void transfereResults(std::vector<Ctxt>& ctxts);
+
+  void start_operation_callback(const std::string& op);
+  void end_operation_callback(const std::string& op);
+
+  void log_value_callback(const std::string& name, double value);
 
   // used forced layout
   bool useForcedLayout() const;
@@ -48,10 +53,15 @@ class ComputationHandle {
  private:
   std::function<void*(int*)> ctxt_callback_;
   std::function<void(void*, int)> result_callback_;
+  std::function<void(const char*, double)> monitor_value_callback_;
+  std::function<void(const char*, bool)> monitor_progress_callback_;
   const char* forced_layout_;
   const bool clear_memory_;
 };
 
+/*
+ * Singleton Class that keeps track of c++ objects accessed via python.
+ */
 class PythonHandle {
  public:
   static PythonHandle& getInstance();
@@ -112,6 +122,9 @@ void* aluminum_shark_loadBackend(const char* libpath);
 
 // destroys the given `aluminum_shark_HEBackend`
 void aluminum_shark_destroyBackend(void* backend_ptr);
+
+// turns the ressource monitor on or off for this backend
+void aluminum_shark_enable_ressource_monitor(bool enable, void* backend_ptr);
 
 // Context
 
@@ -242,10 +255,11 @@ typedef struct aluminum_shark_Computation {
 };
 
 // registert for the next computation
-void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
-                                         void (*result_callback)(void*, int),
-                                         const char* forced_layout,
-                                         bool clear_memory);
+void* aluminum_shark_RegisterComputation(
+    void* (*ctxt_callback)(int*), void (*result_callback)(void*, int),
+    void (*monitor_value_callback)(const char*, double),
+    void (*monitor_progress_callback)(const char*, bool),
+    const char* forced_layout, bool clear_memory);
 
 // turns logging on or off
 void aluminum_shark_EnableLogging(bool on);

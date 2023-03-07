@@ -123,6 +123,18 @@ void ComputationHandle::transfereResults(std::vector<Ctxt>& ctxts) {
   delete[] result;
 }
 
+void ComputationHandle::start_operation_callback(const std::string& name) {
+  monitor_progress_callback_(name.c_str(), true);
+}
+void ComputationHandle::end_operation_callback(const std::string& name) {
+  monitor_progress_callback_(name.c_str(), false);
+}
+
+void ComputationHandle::log_value_callback(const std::string& name,
+                                           double value) {
+  monitor_value_callback_(name.c_str(), value);
+}
+
 bool ComputationHandle::useForcedLayout() const {
   return forced_layout_ != nullptr;
 };
@@ -161,6 +173,12 @@ void* aluminum_shark_loadBackend(const char* libpath) {
 void aluminum_shark_destroyBackend(void* backend_ptr) {
   AS_LOG_S << "Deleting backend: " << backend_ptr << std::endl;
   delete static_cast<aluminum_shark_HEBackend*>(backend_ptr);
+}
+
+// turns the ressource monitor on or off for this backend
+void aluminum_shark_enable_ressource_monitor(bool enable, void* backend_ptr) {
+  static_cast<aluminum_shark_HEBackend*>(backend_ptr)
+      ->backend->enable_ressource_monitor(enable);
 }
 
 // return (void*)aluminum_shark_Context*
@@ -334,7 +352,6 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
   if (aluminum_shark::log_large_vectors()) {
     AS_LOG_DEBUG << "Encrypting Double. Values: " << ptxt_vec << std::endl;
   }
-
   AS_LOG_INFO << "number of values (passed/read) " << size << "/"
               << ptxt_vec.size() << ", name: " << name << std::endl;
 
@@ -369,7 +386,11 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
           context->context->encrypt(v, name)));
     }
   }
-  AS_LOG_S << "Input encrypted" << std::endl;
+  if (hectxts.size() > 0) {
+    AS_LOG_INFO << "Ciphertext size: " << hectxts[0]->size() << " bytes"
+                << std::endl;
+  }
+  AS_LOG_DEBUG << "Input encrypted" << std::endl;
   // create ctxt and wrap it for python
   aluminum_shark_Ctxt* ret = new aluminum_shark_Ctxt();
   // create shared_prt with empty ctxt and then copy the result in
@@ -432,17 +453,20 @@ void aluminum_shark_DestroyCiphertext(void* ctxt_ptr) {
   delete static_cast<aluminum_shark_Ctxt*>(ctxt_ptr);
 }
 
-void* aluminum_shark_RegisterComputation(void* (*ctxt_callback)(int*),
-                                         void (*result_callback)(void*, int),
-                                         const char* forced_layout,
-                                         bool clear_memory) {
+void* aluminum_shark_RegisterComputation(
+    void* (*ctxt_callback)(int*), void (*result_callback)(void*, int),
+    void (*monitor_value_callback)(const char*, double),
+    void (*monitor_progress_callback)(const char*, bool),
+    const char* forced_layout, bool clear_memory) {
   aluminum_shark_Computation* ret = new aluminum_shark_Computation();
   if (forced_layout && strlen(forced_layout) == 0) {
     ret->computation = std::make_shared<aluminum_shark::ComputationHandle>(
-        ctxt_callback, result_callback, nullptr, clear_memory);
+        ctxt_callback, result_callback, monitor_value_callback,
+        monitor_progress_callback, nullptr, clear_memory);
   } else {
     ret->computation = std::make_shared<aluminum_shark::ComputationHandle>(
-        ctxt_callback, result_callback, forced_layout, clear_memory);
+        ctxt_callback, result_callback, monitor_value_callback,
+        monitor_progress_callback, forced_layout, clear_memory);
   }
   auto& pyh = ::aluminum_shark::PythonHandle::getInstance();
   pyh.registerComputation(ret->computation);

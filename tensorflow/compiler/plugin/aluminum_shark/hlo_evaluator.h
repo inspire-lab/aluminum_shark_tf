@@ -133,6 +133,12 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
                   << std::endl;
     }
 
+    // grab a monitor if avaialbe
+    if (ctxts.size() > 0) {
+      ressource_monitor_ =
+          ctxts[0].getContext()->getBackend()->get_ressource_monitor();
+    }
+
     // take the ctxt passed in from python and map them to literals
     AS_LOG_INFO << "Number of arg_literals: "
                 << std::to_string(arg_literals.size())
@@ -433,32 +439,6 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
     return &it->second;
   }
 
-  // helper function to assign plaintexts and ciphertexts to correct storage
-  // objects
-  void unwrapBaseTxt(const HloInstruction* hlo,
-                     ::aluminum_shark::BaseTxt& base) {
-    // TODO RP: obsolete?
-    AS_LOG_CRITICAL << "calling obsolete function " << std::endl;
-    throw std::exception();
-    // try {
-    //   evaluated_ctxt_[hlo] = dynamic_cast<::aluminum_shark::Ctxt&>(base);
-    // } catch (const std::bad_cast& e) {
-    //   try {
-    //     constant_ptxt_[hlo] = dynamic_cast<::aluminum_shark::Ptxt&>(base);
-    //   } catch (const std::bad_cast& e) {
-    //     AS_LOG_S << "UnExpected excpetion unwrapping " << base.to_string()
-    //              << " : " << e.what() << std::endl;
-    //   }
-    // }
-  }
-
-  void unwrapBaseTxt(const HloInstruction* hlo,
-                     std::shared_ptr<::aluminum_shark::BaseTxt> base) {
-    AS_LOG_CRITICAL << "calling obsolete function " << std::endl;
-    throw std::exception();
-    // unwrapBaseTxt(hlo, *base);
-  }
-
   // TODO: think about one structure for both. it would make the lookup and
   // unwrapping easier. like `std::map<const HloInstruction*, BaseTxt>`
 
@@ -480,6 +460,9 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // the compuation handle that holds the callbacks
   std::shared_ptr<::aluminum_shark::ComputationHandle> computation_handle_;
+
+  // the compuation handle that holds the callbacks
+  std::shared_ptr<::aluminum_shark::Monitor> ressource_monitor_;
 
   // a list of operations that can be performed inplace
   std::unordered_set<const HloInstruction*> inplace_ops;
