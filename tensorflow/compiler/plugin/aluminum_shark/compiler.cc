@@ -195,7 +195,6 @@ AluminumSharkCompiler::BuildMemoryDepencies(HloModule* module) {
     auto node_iter = nodes.begin();
     const HloInstruction* node = *node_iter;
     AS_LOG_DEBUG << "visting " << node->name() << std::endl;
-    std::cout << "visting " << node->name() << std::endl;
     nodes.erase(node_iter);
 
     // for each operand insert the current node into the
@@ -207,7 +206,6 @@ AluminumSharkCompiler::BuildMemoryDepencies(HloModule* module) {
       if (operand == root) {
         continue;
       }
-      std::cout << "\t" << operand->name() << std::endl;
       // add it to the iteration set
       nodes.insert(operand);
       // check if the operand is in the map
@@ -232,7 +230,6 @@ AluminumSharkCompiler::BuildMemoryDepencies(HloModule* module) {
     ss << "\n";
   }
   AS_LOG_DEBUG << "Memory depencies: " << ss.str() << std::endl;
-  std::cout << "Memory depencies: " << ss.str() << std::endl;
   return deps;
 }
 
