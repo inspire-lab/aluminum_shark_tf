@@ -821,9 +821,12 @@ void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
     AS_LOG_SA << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
-  for (size_t i = 0; i < one_v.size(); ++i) {
-    one.getValue()[i]->addInPlace(to_std_shared_ptr(two.getValue()[i]));
-  }
+  // create function to run in prallel
+  auto func = [&one_v, &two_v](size_t i) {
+    one_v[i]->addInPlace(to_std_shared_ptr(two_v[i]));
+  };
+  run_parallel(0, one_v.size(), func);
+  AS_LOG_INFO << "addition done " << std::endl;
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
@@ -882,9 +885,12 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
                     << two.shape() << std::endl;
     throw std::runtime_error("incompatbile shapes");
   }
-  for (size_t i = 0; i < one_v.size(); ++i) {
+  // create function to run in prallel
+  auto func = [&one_v, &two_v](size_t i) {
     one_v[i]->multInPlace(to_std_shared_ptr(two_v[i]));
-  }
+  };
+  run_parallel(0, one_v.size(), func);
+  AS_LOG_INFO << "multiplying done " << std::endl;
 }
 
 void BatchLayout::add_in_place(Ctxt& one, long two) const {
