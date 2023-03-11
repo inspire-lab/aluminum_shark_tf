@@ -135,8 +135,8 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
     // grab a monitor if avaialbe
     if (ctxts.size() > 0) {
-      ressource_monitor_ =
-          ctxts[0].getContext()->getBackend()->get_ressource_monitor();
+      context_ = ctxts[0].getContext();
+      ressource_monitor_ = context_->getBackend()->get_ressource_monitor();
     }
 
     // take the ctxt passed in from python and map them to literals
@@ -457,6 +457,9 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
 
   // the compuation handle that holds the callbacks
   std::shared_ptr<::aluminum_shark::ComputationHandle> computation_handle_;
+
+  // the HE context associated with this computation
+  const ::aluminum_shark::HEContext* context_ = nullptr;
 
   // the compuation handle that holds the callbacks
   std::shared_ptr<::aluminum_shark::Monitor> ressource_monitor_;

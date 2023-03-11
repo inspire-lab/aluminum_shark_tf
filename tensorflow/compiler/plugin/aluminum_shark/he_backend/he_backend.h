@@ -149,6 +149,12 @@ class HEContext {
 
   virtual HE_SCHEME scheme() const = 0;
 
+  // other
+  // Signals to the backend that ciphertexts that are created next logically
+  // belong together. Can be used for optimization by the backend.
+  // Starting a new group will close the current group
+  virtual void startNewGroup(const std::string& name) const = 0;
+
  private:
   friend HEBackend;
 };

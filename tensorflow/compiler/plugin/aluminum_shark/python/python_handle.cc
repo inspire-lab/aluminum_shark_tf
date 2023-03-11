@@ -374,6 +374,9 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
 
   AS_LOG_S << "Input layed out" << std::endl;
   std::vector<shared_ptr<aluminum_shark::HECtxt>> hectxts;
+
+  context->context->startNewGroup("inputs");
+
   if (parallel) {
     // running multithreaded encryption
     hectxts = std::vector<shared_ptr<aluminum_shark::HECtxt>>(

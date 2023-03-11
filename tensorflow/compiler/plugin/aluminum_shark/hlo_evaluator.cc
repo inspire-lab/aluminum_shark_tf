@@ -2748,12 +2748,16 @@ Status AluminumSharkHloEvaluator::Preprocess(HloInstruction* hlo) {
       AS_LOG_DEBUG << "querying ressource monitor" << std::endl;
       while (ressource_monitor_->get_next(name, value)) {
         AS_LOG_DEBUG << "got: " << name << "=" << value << std::endl;
-        std::cout << "got: " << name << "=" << value << std::endl;
         computation_handle_->log_value_callback(name, value);
       }
       AS_LOG_DEBUG << "done" << std::endl;
     }
   }
+  // start a new group
+  if (context_) {
+    context_->startNewGroup(hlo->ToString());
+  }
+
   return ShapeUtil::ValidateShape(hlo->shape());
 }
 
