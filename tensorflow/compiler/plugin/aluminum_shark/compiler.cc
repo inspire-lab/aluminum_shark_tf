@@ -236,83 +236,28 @@ AluminumSharkCompiler::BuildMemoryDepencies(HloModule* module) {
 std::unordered_set<const HloInstruction*> AluminumSharkCompiler::FindInplaceOps(
     HloModule* module) {
   AS_LOG_INFO << "finding inplace operations" << std::endl;
+
   // check for operations that can be done inplace
-  HloInstruction* root = module->entry_computation()->root_instruction();
 
-  // set of candidate ops
+  std::stringstream ss;
+  ss << "usage counts" << std::endl;
   std::unordered_set<const HloInstruction*> inplace_ops;
-  // count the uses of HLOs
-  std::map<const HloInstruction*, int> op_use_count;
-  // iterate over all nodes
-  std::unordered_set<const HloInstruction*> nodes;
-  nodes.insert(root);
-  std::unordered_set<const HloInstruction*> visited;
-  while (nodes.size() != 0) {
-    // get first node from the set of unvisted nodes and remove
-    auto node_iter = nodes.begin();
-    const HloInstruction* node = *node_iter;
-    nodes.erase(node_iter);
-
-    // collect a set of all operands
-    auto n_operands = node->operand_count();
-    std::unordered_set<const HloInstruction*> operand_set;
-    for (size_t i = 0; i < n_operands; ++i) {
-      operand_set.insert(node->operand(i));
-    }
-
-    // go over the unqiue operands and increase the use counter and add them to
-    // the set to visit if did not visit them already
-    for (auto n : operand_set) {
-      // increase counter
-      auto iter = op_use_count.find(n);
-      if (iter == op_use_count.end()) {
-        op_use_count[n] = 1;
-      } else {
-        iter->second += 1;
-      }
-      // check if we visited it already
-      auto iter_v = visited.find(n);
-      if (iter_v == visited.end()) {
-        nodes.insert(n);
+  for (auto hlo_it : module->entry_computation()->instructions()) {
+    ss << "\t" << hlo_it->name() << std::endl;
+    for (auto op : hlo_it->operands()) {
+      ss << "\t\t" << op->name() << ": " << op->user_count() << std::endl;
+      if (op->user_count() != 1) {
+        goto outer;  // break inner loop and contiue outer loop next iteration
       }
     }
-
-    // check if the node is a candidate op
-    HloOpcode opcode = node->opcode();
-    if (opcode == HloOpcode::kAdd          //
-        || opcode == HloOpcode::kMultiply  //
-        || opcode == HloOpcode::kSubtract  //
-        || opcode == HloOpcode::kDivide    //
-    ) {
-      inplace_ops.insert(node);
-    }
-
-    // add current node to the list of visited notes
-    visited.insert(node);
+    inplace_ops.insert(hlo_it);
+  outer:;
   }
 
-  // logging
+  AS_LOG_INFO << ss.str();
+
   if (::aluminum_shark::log(::aluminum_shark::AS_INFO)) {
-    AS_LOG_INFO << "possible inplace ops: " << std::endl;
-    for (const auto node : inplace_ops) {
-      AS_LOG_SA << "\t" << node->name() << std::endl;
-    }
-    AS_LOG_INFO << "op use counts: " << std::endl;
-    for (auto iter : op_use_count) {
-      AS_LOG_SA << "\t" << iter.first->name() << ": " << iter.second
-                << std::endl;
-    }
-  }
-
-  // remove ops from the set are used more than once
-  for (auto it = inplace_ops.begin(); it != inplace_ops.end();) {
-    if (op_use_count[*it] != 1)
-      it = inplace_ops.erase(it);
-    else
-      ++it;
-  }
-  if (::aluminum_shark::log(::aluminum_shark::AS_DEBUG)) {
-    AS_LOG_DEBUG << "inplace ops:" << std::endl;
+    AS_LOG_INFO << "inplace ops:" << std::endl;
     for (const auto node : inplace_ops) {
       AS_LOG_SA << "\t" << node->name() << std::endl;
     }

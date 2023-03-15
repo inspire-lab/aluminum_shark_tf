@@ -435,8 +435,9 @@ class AluminumSharkHloEvaluator : public DfsHloVisitorWithDefault {
       }
       return nullptr;
     }
-    AS_LOG_DEBUG << "Found " << it->second.to_string() << std::endl;
-    return &it->second;
+    AS_LOG_DEBUG << "Found " << it->second.to_string()
+                 << " address: " << (void*)&(it->second) << std::endl;
+    return &(it->second);
   }
 
   // TODO: think about one structure for both. it would make the lookup and

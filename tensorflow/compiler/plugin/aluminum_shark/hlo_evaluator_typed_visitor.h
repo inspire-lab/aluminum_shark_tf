@@ -578,6 +578,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                   ToArithmeticSafeType(rhs_elem));
             }));
 
+    AS_LOG_DEBUG << "running " << multiply->name() << " inplace "
+                 << parent_->inplace(multiply) << std::endl;  // remove_me
     if (parent_->inplace(multiply)) {
       ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
           multiply,
@@ -585,6 +587,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
             lhs *= rhs;
             return &lhs;
           });
+      AS_LOG_DEBUG << multiply->name() << " result " << (void*)ctxt_ptr
+                   << std::endl;  // remove_me
       if (ctxt_ptr) {
         parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
       }
@@ -592,6 +596,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       auto ctxt_ptr = ElementWiseBinaryOpCtxt(
           multiply, [](::aluminum_shark::Ctxt& lhs,
                        ::aluminum_shark::BaseTxt& rhs) { return lhs * rhs; });
+      AS_LOG_DEBUG << multiply->name() << " result " << ctxt_ptr
+                   << std::endl;  // remove_me
       if (ctxt_ptr) {
         parent_->evaluated_ctxt_[multiply] = *ctxt_ptr;
       }
@@ -620,12 +626,16 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
                                               ToArithmeticSafeType(rhs_elem));
                         }));
 
+    AS_LOG_DEBUG << "running " << add->name() << " inplace "
+                 << parent_->inplace(add) << std::endl;  // remove_me
     if (parent_->inplace(add)) {
       ::aluminum_shark::Ctxt* ctxt_ptr = ElementWiseBinaryOpCtxtInplace(
           add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
             lhs += rhs;
             return &lhs;
           });
+      AS_LOG_DEBUG << add->name() << " result " << (void*)ctxt_ptr
+                   << std::endl;  // remove_me
       if (ctxt_ptr) {
         parent_->evaluated_ctxt_[add] = *ctxt_ptr;
       }
@@ -634,6 +644,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
           add, [](::aluminum_shark::Ctxt& lhs, ::aluminum_shark::BaseTxt& rhs) {
             return lhs + rhs;
           });
+      AS_LOG_DEBUG << add->name() << " result " << ctxt_ptr
+                   << std::endl;  // remove_me
       if (ctxt_ptr) {
         parent_->evaluated_ctxt_[add] = *ctxt_ptr;
       }
@@ -3433,6 +3445,8 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const auto* rhs = instruction->operand(1);
     // TF_RET_CHECK(ShapeUtil::SameDimensions(shape, rhs->shape()));
     // TF_RET_CHECK(ShapeUtil::SameDimensions(lhs->shape(), rhs->shape()));
+    AS_LOG_DEBUG << "\t" << instruction->name() << " lhs " << lhs->name()
+                 << " rhs " << rhs->name() << std::endl;  // remove_me
 
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
@@ -3470,12 +3484,17 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     const auto* rhs = instruction->operand(1);
     // TF_RET_CHECK(ShapeUtil::SameDimensions(shape, rhs->shape()));
     // TF_RET_CHECK(ShapeUtil::SameDimensions(lhs->shape(), rhs->shape()));
+    AS_LOG_DEBUG << "\t" << instruction->name() << " lhs " << lhs->name()
+                 << " rhs " << rhs->name() << std::endl;  // remove_me
 
     const Literal& lhs_literal = parent_->GetEvaluatedLiteralFor(lhs);
     const Literal& rhs_literal = parent_->GetEvaluatedLiteralFor(rhs);
 
+    AS_LOG_DEBUG << "getting ctxts " << std::endl;  // remove_me
     ::aluminum_shark::Ctxt* lhs_ctxt = parent_->GetEvaluatedCtxtFor(lhs);
     ::aluminum_shark::Ctxt* rhs_ctxt = parent_->GetEvaluatedCtxtFor(rhs);
+    AS_LOG_DEBUG << "got ctxts lhs " << (void*)lhs_ctxt << " rhs "
+                 << (void*)rhs_ctxt << std::endl;  // remove_me
     if (!lhs_ctxt && !rhs_ctxt) {
       AS_LOG_INFO << "no ctxt involved in instruction " << instruction->name()
                   << " returing nullptr" << std::endl;
@@ -3483,9 +3502,15 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     }
 
     if (rhs_ctxt) {
-      AS_LOG("ElementWiseBinaryOp " + instruction->name() +
-             "  on Ctxt: Ctxt 1: " + lhs_ctxt->to_string() +
-             " Ctxt 2: " + rhs_ctxt->to_string());
+      if (!lhs_ctxt) {
+        ::aluminum_shark::Ptxt ptxt(lhs_literal,
+                                    instruction->operand(0)->name());
+        return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
+            binary_op(*rhs_ctxt, ptxt));
+      }
+      AS_LOG_DEBUG << "ElementWiseBinaryOpCtxt " << instruction->name()
+                   << "  on Ctxt: Ctxt 1: " << lhs_ctxt->to_string()
+                   << " Ctxt 2: " + rhs_ctxt->to_string() << std::endl;
       return std::dynamic_pointer_cast<::aluminum_shark::Ctxt>(
           binary_op(*lhs_ctxt, *rhs_ctxt));
     }
