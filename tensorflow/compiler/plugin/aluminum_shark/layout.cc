@@ -1217,6 +1217,7 @@ Ctxt BatchLayout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
     throw std::invalid_argument("shapes incompatible");
   }
 
+  two.updateLayout(LAYOUT_TYPE::SIMPLE, one.getContext());
   // the logical shape of the output after decoding is done
   Shape logical_shape{one.shape()[0], two.shape()[1]};
   AS_LOG_INFO << "result shape: " << logical_shape << std::endl;
@@ -1293,7 +1294,7 @@ Ctxt BatchLayout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
   // create result objects
   // create result layout
   std::shared_ptr<Layout> result_layout(
-      createLayout(LAYOUT_TYPE::BATCH, result_shape));
+      createLayout(LAYOUT_TYPE::BATCH, {one.shape()[0], two.shape()[1]}));
   // create the result vector
   std::vector<shared_ptr<HECtxt>> result_vector(two.shape()[1]);
 

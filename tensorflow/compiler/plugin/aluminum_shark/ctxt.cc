@@ -23,7 +23,7 @@ Ctxt Ctxt::deepCopy() const {
   AS_LOG_S << "copy created" << std::endl;
   // create a copy of the stored object in parallel
   std::vector<shared_ptr<HECtxt>> hectxt_copy(value_.size());
-  auto copy_func = [&value_, &hectxt_copy](size_t i) {
+  auto copy_func = [this, &hectxt_copy](size_t i) {
     hectxt_copy[i] = shared_ptr<HECtxt>(value_[i]->deepCopy());
   };
   run_parallel(0, value_.size(), copy_func);
