@@ -2894,7 +2894,7 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
 
     for (const auto& user_hlo : op->users()) {
       // if it is in the evaluated_ctxt_ map it was evaluated
-      if (evaluated_ctxt_.find(user_hlo) == evaluated_ctxt_.end()) {
+      if (evaluated_.find(user_hlo) == evaluated_.end()) {
         del = false;
         break;
       }
@@ -2926,6 +2926,11 @@ void AluminumSharkHloEvaluator::check_and_free_memory(
           }
         }
       }
+    }
+    // delete the literal too
+    auto lit_iter = evaluated_.find(op);
+    if (lit_iter != evaluated_.end()) {
+      evaluated_[op] = LiteralUtil::CreateR0<int>(0);
     }
   }
 }
