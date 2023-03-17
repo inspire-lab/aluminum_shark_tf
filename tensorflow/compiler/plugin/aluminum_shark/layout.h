@@ -213,6 +213,7 @@ class Layout {
 
   virtual Ctxt convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
                                         xla::HloInstruction* hlo) const;
+  virtual Ctxt mat_mult_memoptimized(Ctxt& one, Ptxt& two) const;
 
  protected:
   Shape shape_;
@@ -334,6 +335,7 @@ class BatchLayout : public Layout {
 
   Ctxt convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
                                 xla::HloInstruction* hlo) const override;
+  Ctxt mat_mult_memoptimized(Ctxt& one, Ptxt& two) const override;
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const;
 
