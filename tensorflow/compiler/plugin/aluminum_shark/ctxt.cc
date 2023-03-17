@@ -21,12 +21,13 @@ Ctxt Ctxt::deepCopy() const {
   AS_LOG("creating deep copy of: " + name_);
   Ctxt copy = *this;
   AS_LOG_S << "copy created" << std::endl;
-  // create a copy of the stored object
-  std::vector<shared_ptr<HECtxt>> hectxt_copy;
-  for (auto hectxt : value_) {
-    // AS_LOG_S << "copying HECtxt" << std::endl;
-    hectxt_copy.push_back(shared_ptr<HECtxt>(hectxt->deepCopy()));
-  }
+  // create a copy of the stored object in parallel
+  std::vector<shared_ptr<HECtxt>> hectxt_copy(value_.size());
+  auto copy_func = [&value_, &hectxt_copy](size_t i) {
+    hectxt_copy[i] = shared_ptr<HECtxt>(value_[i]->deepCopy());
+  };
+  run_parallel(0, value_.size(), copy_func);
+
   copy.setValue(hectxt_copy);
   // copy layout
   copy.setLayout(std::shared_ptr<Layout>(copy.layout().deepCopy()));
