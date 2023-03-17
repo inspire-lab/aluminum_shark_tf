@@ -352,6 +352,7 @@ cc_library(
         ":logging",
         "//tensorflow/compiler/plugin/aluminum_shark/python:python_handle",
         "//tensorflow/compiler/plugin/aluminum_shark/utils",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:env_vars",
         "//tensorflow/compiler/xla:array2d",
         "//tensorflow/compiler/xla:literal",
         "//tensorflow/compiler/xla:literal_util",
