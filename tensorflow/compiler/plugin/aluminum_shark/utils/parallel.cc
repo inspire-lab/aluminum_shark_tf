@@ -1,5 +1,6 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/parallel.h"
 
+#include <iostream>
 #include <thread>
 #include <vector>
 
@@ -24,6 +25,22 @@ void run_parallel(size_t start, size_t stop, std::function<void(size_t)> func) {
           func(i);
         }
       }
+    }));
+  }
+  // wait for all threads to complete
+  for (auto& t : threads) {
+    t.join();
+  }
+}
+
+void run_parallel(std::function<bool()> func) {
+  // always run with n_threads. since we don't know
+  std::vector<std::thread> threads;
+  threads.reserve(n_threads);
+  for (size_t thread_id = 0; thread_id < n_threads; ++thread_id) {
+    threads.push_back(std::thread([&func] {
+      while (func()) {
+      };
     }));
   }
   // wait for all threads to complete
