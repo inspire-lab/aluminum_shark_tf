@@ -1556,9 +1556,16 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
       if (rhs_ctxt) {
         result = layout.dot(*lhs_ctxt, *rhs_ctxt);
       } else {
-        result = layout.dot(
-            *lhs_ctxt, ::aluminum_shark::Ptxt(
-                           parent_->GetEvaluatedLiteralFor(rhs), rhs->name()));
+        if (::aluminum_shark::agressive_memory_cleanup == -2) {
+          ::aluminum_shark::Ptxt ptxt(parent_->GetEvaluatedLiteralFor(rhs),
+                                      rhs->name());
+          result = layout.mat_mult_memoptimized(*lhs_ctxt, ptxt);
+        } else {
+          result = layout.dot(
+              *lhs_ctxt,
+              ::aluminum_shark::Ptxt(parent_->GetEvaluatedLiteralFor(rhs),
+                                     rhs->name()));
+        }
       }
 
       // register result with parent

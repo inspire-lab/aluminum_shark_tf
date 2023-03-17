@@ -132,6 +132,14 @@ Ctxt Layout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
   throw std::runtime_error("not implemented");
 }
 
+Ctxt Layout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
+  std::cout << "mat_mult_memoptimized not implemented for"
+            << layout_type_to_string(this->type()) << std::endl;
+  AS_LOG_CRITICAL << "mat_mult_memoptimized not implemented for"
+                  << layout_type_to_string(this->type()) << std::endl;
+  throw std::runtime_error("not implemented");
+}
+
 xla::Shape Layout::shape_xla() const { return create_xla_dummy_shape(shape_); }
 
 xla::Shape Layout::get_physical_shape_xla() const {
@@ -1192,6 +1200,234 @@ Ctxt BatchLayout::mat_mult_internal(const Ctxt& one, const T& two) const {
   return result_ctxt;
 }
 
+Ctxt BatchLayout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
+  // we first do a "dry run"  create pairs of indices that that tell us which
+  // plaintexts are involoved in which result value. from these pairs we can
+  // create create an execution order that allows us to release plaintexts as
+  // early as possible
+
+  // shape checks
+  // this only works for iif we have 2 dimensionals matrices and the number
+  // of clumones in one is equal to the number of rows in two
+  AS_LOG_INFO << "shapes for mat mult: " << one.shape() << ", " << two.shape()
+              << std::endl;
+  if (one.shape().size() != 2 || two.shape().size() != 2 ||
+      one.shape()[1] != two.shape()[0]) {
+    AS_LOG_S << "invalid shapes for mat mult " << std::endl;
+    throw std::invalid_argument("shapes incompatible");
+  }
+
+  // the logical shape of the output after decoding is done
+  Shape logical_shape{one.shape()[0], two.shape()[1]};
+  AS_LOG_INFO << "result shape: " << logical_shape << std::endl;
+  // this the actual phyical shape of the
+  auto result_shape = create_xla_dummy_shape({1, two.shape()[1]});
+
+  // create function to do the dry and generate our pairs
+  int64_t size = two.shape()[1];  // number of output ctxts. batch dim is 1
+
+  std::vector<std::pair<std::vector<int64_t>, std::vector<int64_t>>>
+      dot_indices(
+          size,
+          std::make_pair<std::vector<int64_t>, std::vector<int64_t>>({}, {}));
+
+  const auto& lhs_shape = one.shape();
+  const auto& rhs_shape = two.shape();
+  auto func = [&dot_indices, &lhs_shape, &rhs_shape,
+               &result_shape](const absl::Span<const int64_t> out_index) {
+    AS_LOG_DEBUG << "output index: "
+                 << std::vector<int64_t>(out_index.begin(), out_index.end())
+                 << std::endl;
+    // setup the varialbes we'll iterate over
+    int row = out_index[0];
+    int col = out_index[1];
+    std::vector<size_t> lhs_index(2, 0);
+    std::vector<size_t> rhs_index(2, 0);
+    lhs_index[0] = row;
+    rhs_index[1] = col;
+    // iteration bound. we could either use lhs_shape[1] or rhs_shape[0]
+    // here
+    size_t n_iter = lhs_shape[1];
+
+    for (size_t i = 0; i < n_iter; ++i) {
+      // iterate over the colmuns of lhs and rows of lhs
+      lhs_index[1] = i;
+      rhs_index[0] = i;
+      auto flat_outindex = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+          result_shape, out_index);
+      // this is where we record the indecies
+      dot_indices[flat_outindex].first.push_back(
+          multi_index_to_flat(lhs_index, lhs_shape));
+      dot_indices[flat_outindex].second.push_back(
+          multi_index_to_flat(rhs_index, rhs_shape));
+    }
+  };
+
+  // start the dry and extract the index pairs
+  std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
+  std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
+  xla::ShapeUtil::ForEachIndexParallel(
+      result_shape, /*base*/ base_vec, /*count*/ result_shape.dimensions(),
+      /*increment*/ incr_vec,
+      [&func](const absl::Span<const int64_t> multi_index) {
+        func(multi_index);
+      });
+
+  if (log(AS_DEBUG)) {
+    std::stringstream ss;
+    ss << "indicies generated: " << std::endl;
+    for (auto& pair : dot_indices) {
+      ss << "\t" << pair.first << std::endl;
+      ss << "\t" << pair.second << std::endl << std::endl;
+    }
+    AS_LOG_DEBUG << "generated dot indicies. " << ss.str() << std::endl;
+  }
+  AS_LOG_INFO << "generated dot indicies" << std::endl;
+
+  // input values
+  auto& lhs_v = one.getValue();
+  auto& rhs_v = two.getValue();
+  AS_LOG_INFO << "lhs_v.size() = " << lhs_v.size()
+              << ", rhs_v.size() = " << rhs_v.size() << std::endl;
+
+  // create result objects
+  // create result layout
+  std::shared_ptr<Layout> result_layout(
+      createLayout(LAYOUT_TYPE::BATCH, result_shape));
+  // create the result vector
+  std::vector<shared_ptr<HECtxt>> result_vector(two.shape()[1]);
+
+  // group by rhs index but keep output index information
+  // this needs a good amount of locking
+
+  // the index into this vector corresponds to the index into the rhs data
+  // each index holds a vector of std::pair<int64_t, int64_t>
+  // pair.first is the output_index and pair.second is the index into the lhs
+  // data. read and write access protect by `rhs_mutex`
+  std::mutex rhs_mutex;
+  std::vector<std::vector<std::pair<int64_t, int64_t>>> rhs_indicies(
+      rhs_v.size());
+
+  size_t result_index = 0;
+  for (auto& pair : dot_indices) {
+    for (size_t i = 0; i < pair.second.size(); ++i) {
+      int64_t lhs_index = pair.first[i];
+      int64_t rhs_index = pair.second[i];
+      rhs_indicies[rhs_index].push_back(
+          std::pair<int64_t, int64_t>(result_index, lhs_index));
+    }
+    ++result_index;
+  }
+  AS_LOG_INFO << "generated rhs first index pairs" << std::endl;
+
+  // the result vector holds a bunch of shared_ptr<HECtxt> objects.
+  // The objects that go into it need to summed up. read and write
+  // access is protected by the `result_mutex`. If the pointer at any
+  // index `i` is not null it is responsiblity of the thread that
+  // wants to write to `i` sum the object there and the object it
+  // wants to write. to do so it must aquire the lock. take the
+  // object out of the list and release the lock. the sumation must
+  // not be performed while holding the lock. a theard can only write
+  // to `i` iff the value at `i` == nullptr and it holds
+  // `result_mutex`
+
+  // create the result object
+  std::mutex result_mutex;
+
+  // create function to perform the actual dot;
+  auto dot_func = [&rhs_mutex, &result_mutex, &rhs_indicies, &result_vector,
+                   &lhs_v, &rhs_v]() -> bool {
+    // get the index pair and the shared_ptr
+    std::pair<int64_t, int64_t> rhs_pair;
+    shared_ptr<HEPtxt> rhs_ptxt;
+
+    int64_t rhs_index = 0;
+    std::stringstream ss;
+    AS_LOG_DEBUG << "entering first critical section" << std::endl;
+    {  // start rhs_mutex
+      std::lock_guard<std::mutex> lock(rhs_mutex);
+      // find the first non_empty index
+      for (; rhs_index < rhs_indicies.size(); ++rhs_index) {
+        if (!rhs_indicies[rhs_index].empty()) {
+          // take the last element and remove it
+          rhs_pair = std::move(rhs_indicies[rhs_index].back());
+          rhs_indicies[rhs_index].pop_back();
+          break;
+        }
+      }
+      // check if we consumed all items
+      if (rhs_index == rhs_indicies.size()) {
+        AS_LOG_DEBUG
+            << "exiting first critical section and returning. nothing more todo"
+            << std::endl;
+        return false;
+      }
+      rhs_ptxt = rhs_v[rhs_index];
+      // check if we took the last element and if so set the pointer to null
+      if (rhs_indicies[rhs_index].empty()) {
+        rhs_v[rhs_index] = nullptr;
+      }
+    }  // end rhs_mutex
+    AS_LOG_DEBUG << "exiting first critical section: ptxt[ " << rhs_index
+                 << "] " << rhs_ptxt << std::endl;
+
+    // get lhs data  and output index
+    int64_t output_index = rhs_pair.first;
+    int64_t lhs_index = rhs_pair.second;
+    output_index = rhs_pair.first;
+    lhs_index = rhs_pair.second;
+
+    ss << "getting lhs ciphertext" << lhs_index << "/" << lhs_v.size()
+       << std::endl;
+    AS_LOG_DEBUG << ss.str();
+    shared_ptr<HECtxt> lhs_ctxt = lhs_v[lhs_index];
+    ss << "got ctxt " << lhs_ctxt << " at index " << lhs_index << std::endl;
+    AS_LOG_DEBUG << ss.str();
+
+    // run ctxt plaintext multiplication
+    AS_LOG_DEBUG << "running multiplication" << std::endl;
+    shared_ptr<HECtxt> result = lhs_ctxt->operator*(rhs_ptxt);
+    ss << "multiplication result ctxt " << result << std::endl;
+    AS_LOG_DEBUG << ss.str();
+
+    // write out result
+    // we loop here because other threads might have written a result while we
+    // were busy adding prior results to our result. if that is the case we
+    // need to check again if we can write to the vector
+    while (true) {
+      // first aquire the lock
+      shared_ptr<HECtxt> prior_result;  // to hold values that are allready in
+                                        // the result vector;
+      AS_LOG_DEBUG << "entering second critical section" << std::endl;
+      {  // start result_mutex
+        std::lock_guard<std::mutex> lock(result_mutex);
+        // check if we can just write to result vector
+        if (!result_vector[output_index]) {
+          result_vector[output_index].swap(result);
+          // we are done here
+          AS_LOG_DEBUG << "exiting second critical section and returing"
+                       << std::endl;
+          return true;
+        }
+        // get the pointer of the resulut vector
+        prior_result.swap(result_vector[output_index]);
+        // result_vector[output_index] now holds a nullptr
+      }  // end result_mutex
+      AS_LOG_DEBUG << "exiting second critical section" << std::endl;
+      // perform addition
+      result->addInPlace(prior_result);
+    }
+  };
+
+  // populate the ctxt vector
+  run_parallel(dot_func);
+
+  AS_LOG_INFO << "dot prodcuts done" << std::endl;
+  std::stringstream result_name;
+  result_name << one.getName() << " X " << two.getName();
+  return Ctxt(result_vector, result_layout, result_name.str());
+}
+
 Ctxt BatchLayout::mat_mult(const Ctxt& one, const Ctxt& two) const {
   return mat_mult_internal<Ctxt, HECtxt>(one, two);
 }
@@ -1678,8 +1914,6 @@ Ctxt BatchLayout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
     }
     AS_LOG_DEBUG << "generated convolution indicies. " << ss.str() << std::endl;
   }
-  std::cout << "ptxt test " << rhs_v[0] << std::endl;
-  std::cout << "\t" << rhs_v[0]->to_string() << std::endl;
   AS_LOG_INFO << "generated convolution indicies" << std::endl;
   // create the result object
   Layout* layout =
@@ -1790,7 +2024,6 @@ Ctxt BatchLayout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
 
     // run ctxt plaintext multiplication
     AS_LOG_DEBUG << "running multiplication" << std::endl;
-    std::cout << "ptxt " << rhs_ptxt->to_string() << std::endl;
     shared_ptr<HECtxt> result = lhs_ctxt->operator*(rhs_ptxt);
     ss << "multiplication result ctxt " << result << std::endl;
     AS_LOG_DEBUG << ss.str();
