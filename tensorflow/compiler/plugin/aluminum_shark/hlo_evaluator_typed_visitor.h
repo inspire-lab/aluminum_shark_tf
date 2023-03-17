@@ -32,6 +32,7 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/hlo_evaluator.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/env_vars.h"
 #include "tensorflow/compiler/xla/array2d.h"
 #include "tensorflow/compiler/xla/literal.h"
 #include "tensorflow/compiler/xla/literal_util.h"
@@ -1453,10 +1454,15 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
     if (ctxt) {
       AS_LOG_INFO << "convolution on encrypted data" << conv->operand(1)->name()
                   << std::endl;
-      parent_->evaluated_ctxt_[conv] = ctxt->layout().convolution(
-          *ctxt,
-          ::aluminum_shark::Ptxt(rhs_literal, conv->operand(1)->name() + "rhs"),
-          conv);
+      ::aluminum_shark::Ptxt ptxt(rhs_literal,
+                                  conv->operand(1)->name() + "rhs");
+      if (::aluminum_shark::agressive_memory_cleanup == -2) {
+        parent_->evaluated_ctxt_[conv] =
+            ctxt->layout().convolution_memoptimized(*ctxt, ptxt, conv);
+      } else {
+        parent_->evaluated_ctxt_[conv] =
+            ctxt->layout().convolution(*ctxt, ptxt, conv);
+      }
     }
     return Status::OK();
   }

@@ -123,6 +123,15 @@ Ctxt Layout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
   throw std::runtime_error("not implemented");
 }
 
+Ctxt Layout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
+                                      xla::HloInstruction* hlo) const {
+  std::cout << "convolution_memoptimized not implemented for"
+            << layout_type_to_string(this->type()) << std::endl;
+  AS_LOG_CRITICAL << "convolution_memoptimized not implemented for"
+                  << layout_type_to_string(this->type()) << std::endl;
+  throw std::runtime_error("not implemented");
+}
+
 xla::Shape Layout::shape_xla() const { return create_xla_dummy_shape(shape_); }
 
 xla::Shape Layout::get_physical_shape_xla() const {
@@ -1433,6 +1442,392 @@ Ctxt BatchLayout::convolution(const Ctxt& lhs, const Ptxt& rhs,
       });
 
   return Ctxt(ctxt_vector, std::shared_ptr<Layout>(layout),
+              "conv(" + lhs.getName() + ")");
+}
+
+Ctxt BatchLayout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
+                                           xla::HloInstruction* hlo) const {
+  AS_LOG_INFO << "updating Layout " << std::endl;
+  rhs.updateLayout(LAYOUT_TYPE::SIMPLE, lhs.getContext());
+  AS_LOG_INFO << "Layout updated. performing convolution " << std::endl;
+  // this is an adapted copy of
+  // xla::HloEvaluatorTypedVisitor::ConvolutionWithLiterals
+  const auto& window = hlo->window();
+  // we need to "fake out" the system by creating fake shapes where the
+  // batch dimension is 1, for both the lhs and the result
+  AS_LOG_INFO << "creating shapes " << std::endl;
+  Shape temp = xla_shape_to_shark_shape(hlo->shape());
+  temp[0] = 1;
+  const xla::Shape& result_shape = create_xla_dummy_shape(temp);
+  temp = xla_shape_to_shark_shape(hlo->operand(0)->shape());
+  temp[0] = 1;
+  const xla::Shape& lhs_shape = create_xla_dummy_shape(temp);
+  const xla::Shape& rhs_shape = hlo->operand(1)->shape();
+
+  TF_CHECK_OK(xla::ShapeUtil::ValidateShape(lhs_shape));
+  TF_CHECK_OK(xla::ShapeUtil::ValidateShape(rhs_shape));
+
+  const auto& dnums = hlo->convolution_dimension_numbers();
+  const int64_t num_spatial_dims = dnums.output_spatial_dimensions_size();
+  CHECK_EQ(num_spatial_dims, dnums.input_spatial_dimensions_size());
+  CHECK_EQ(num_spatial_dims, dnums.kernel_spatial_dimensions_size());
+  CHECK_GE(num_spatial_dims, 0);
+  CHECK_EQ(window.dimensions_size(), num_spatial_dims);
+
+  std::vector<int64_t> window_dimension_sizes;
+  for (auto i : dnums.kernel_spatial_dimensions()) {
+    window_dimension_sizes.push_back(
+        xla::ShapeUtil::GetDimension(rhs_shape, i));
+  }
+
+  const xla::Shape& window_shape = xla::ShapeUtil::MakeShape(
+      rhs_shape.element_type(), window_dimension_sizes);
+
+  xla::DimensionVector lhs_dim_multipliers = MakeDimMultipliers(lhs_shape);
+  xla::DimensionVector rhs_dim_multipliers = MakeDimMultipliers(rhs_shape);
+
+  auto& lhs_v = lhs.getValue();
+  auto& rhs_v = rhs.getValue();
+
+  const int64_t feature_group_count = hlo->feature_group_count();
+  const int64_t batch_group_count = hlo->batch_group_count();
+
+  AS_LOG_INFO << "Convolution batch group count = " << batch_group_count
+              << "\n\t"
+              << "input_batch_dimension = " << dnums.input_batch_dimension()
+              << "\n\t"
+              << "output_batch_dimension = " << dnums.output_batch_dimension()
+              << std::endl;
+  AS_LOG_INFO << "creating computation function " << std::endl;
+
+  // generate a vector that holds the lhs and rhs indecies. the vector holds a
+  // pair of vector. the vectors on each side of the pair need to be multiplied
+  // element wise and summed
+  int64_t size = 1;
+  for (size_t i = 1; i < result_shape.dimensions().size(); i++) {
+    size *= result_shape.dimensions()[i];
+  }
+
+  std::vector<std::pair<std::vector<int64_t>, std::vector<int64_t>>>
+      conv_indices(
+          size,
+          std::make_pair<std::vector<int64_t>, std::vector<int64_t>>({}, {}));
+
+  auto func = [&window_shape, &dnums, &lhs_shape, &rhs_shape, &window,
+               &lhs_dim_multipliers, &rhs_dim_multipliers, &conv_indices,
+               feature_group_count, batch_group_count,
+               &result_shape](const absl::Span<const int64_t> out_index) {
+    // Dimension number applicable for input (lhs).
+    const int64_t input_batch_dim = dnums.input_batch_dimension();
+    const int64_t input_z_dim = dnums.input_feature_dimension();
+    // Dimension number applicable for kernel (rhs).
+    const int64_t kernel_input_z_dim = dnums.kernel_input_feature_dimension();
+    const int64_t kernel_output_z_dim = dnums.kernel_output_feature_dimension();
+    // Dimension number applicable for output.
+    const int64_t output_batch_dim = dnums.output_batch_dimension();
+    const int64_t output_z_dim = dnums.output_feature_dimension();
+
+    const int64_t input_z_size =
+        xla::ShapeUtil::GetDimension(lhs_shape, input_z_dim);
+
+    const int64_t input_batch_size =
+        xla::ShapeUtil::GetDimension(lhs_shape, input_batch_dim);
+
+    const int64_t batch_group_size = input_batch_size / batch_group_count;
+
+    // The size of an input feature group.
+    const int64_t input_feature_group_size = input_z_size / feature_group_count;
+
+    const int64_t output_z_size =
+        xla::ShapeUtil::GetDimension(rhs_shape, kernel_output_z_dim);
+    // The output feature dimension is a concatenation of convolution
+    // results from the different groups.
+    const int64_t output_feature_group_size =
+        output_z_size / feature_group_count;
+
+    // Calculate the group index to which the current output index
+    // belongs.
+    const int64_t feature_group_index =
+        out_index[output_z_dim] / output_feature_group_size;
+
+    const int64_t depthwise_multiplier =
+        batch_group_count > 1 ? output_z_size / input_batch_size : 1;
+    const int64_t batch_group_index =
+        out_index[output_z_dim] / depthwise_multiplier;
+
+    xla::DimensionVector rhs_spatial_index(
+        dnums.kernel_spatial_dimensions_size(), 0);
+
+    // Convolve input feature with kernel.
+    // The mechanism indexes into the correct LHS (input) and RHS
+    // (kernel) locations and accumulates multiplications for a given
+    // output index.
+    do {
+      // Find corresponding spatial dimension index for input (lhs).
+      int64_t lhs_linear_spatial_index = 0;
+      int64_t rhs_linear_spatial_index = 0;
+      for (int64_t ki = 0; ki < rhs_spatial_index.size(); ++ki) {
+        // Spatial dimension number for input (lhs) and output.
+        const int64_t input_spatial_dim = dnums.input_spatial_dimensions(ki);
+        const int64_t output_spatial_dim = dnums.output_spatial_dimensions(ki);
+
+        // Calculate lhs (input) index without taking base dilation into
+        // account.
+        const auto& window_dim = window.dimensions(ki);
+        const int64_t undilated_index =
+            out_index[output_spatial_dim] * window_dim.stride() -
+            window_dim.padding_low() +
+            rhs_spatial_index[ki] * window_dim.window_dilation();
+        // Skip if the lhs (input) index is to be dilated.  As an
+        // optimization, skip this mod if there's no dilation.
+        if (window_dim.base_dilation() > 1 &&
+            undilated_index % window_dim.base_dilation() != 0) {
+          goto cnt;
+        }
+
+        // Calculate the actual lhs (input) index after dilation.  As an
+        // optimization, skip this integer divide if there's no
+        // dilation.
+        int64_t lhs_spatial_index;
+        if (window_dim.base_dilation() > 1) {
+          lhs_spatial_index = undilated_index / window_dim.base_dilation();
+        } else {
+          lhs_spatial_index = undilated_index;
+        }
+
+        // Skip if input index is not in bounds.
+        if (!(lhs_spatial_index >= 0 &&
+              lhs_spatial_index < lhs_shape.dimensions(input_spatial_dim))) {
+          goto cnt;
+        }
+
+        lhs_linear_spatial_index +=
+            lhs_spatial_index * lhs_dim_multipliers[input_spatial_dim];
+        rhs_linear_spatial_index +=
+            (window_dim.window_reversal()
+                 ? ((window_dim.size() - 1) - rhs_spatial_index[ki])
+                 : rhs_spatial_index[ki]) *
+            rhs_dim_multipliers[dnums.kernel_spatial_dimensions(ki)];
+      }
+
+      for (int64_t rhs_iz = 0; rhs_iz < input_feature_group_size; ++rhs_iz) {
+        const int64_t iz =
+            feature_group_index * input_feature_group_size + rhs_iz;
+
+        int64_t lhs_linear_index = lhs_linear_spatial_index;
+        lhs_linear_index +=
+            out_index[output_batch_dim] * lhs_dim_multipliers[input_batch_dim];
+
+        // We are scraping only the diagonal elements in the resultant
+        // convolution output when batch_group_count is greater than 1,
+        // where 1 is the default. No scraping is done in that case.
+        // This approach works out automatically for 'groups' in batches
+        // with group_size > 1, because we already descend down the
+        // batch dimension for the 'output_batch_dim' above.
+        lhs_linear_index +=
+            ((batch_group_index * batch_group_size) % input_batch_size) *
+            lhs_dim_multipliers[input_batch_dim];
+
+        lhs_linear_index += iz * lhs_dim_multipliers[input_z_dim];
+        int64_t rhs_linear_index = rhs_linear_spatial_index;
+
+        rhs_linear_index +=
+            out_index[output_z_dim] * rhs_dim_multipliers[kernel_output_z_dim];
+        rhs_linear_index += rhs_iz * rhs_dim_multipliers[kernel_input_z_dim];
+
+        auto flat_outindex = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+            result_shape, out_index);
+
+        // this is where we record the indecies
+        conv_indices[flat_outindex].first.push_back(lhs_linear_index);
+        conv_indices[flat_outindex].second.push_back(rhs_linear_index);
+      }
+    cnt : {}
+    } while (xla::IndexUtil::BumpIndices(window_shape,
+                                         absl::MakeSpan(rhs_spatial_index)));
+    // return result;
+  };
+
+  std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
+  std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
+
+  xla::ShapeUtil::ForEachIndexParallel(
+      result_shape, /*base*/ base_vec, /*count*/ result_shape.dimensions(),
+      /*increment*/ incr_vec,
+      [&result_shape, &func](const absl::Span<const int64_t> multi_index) {
+        auto linear_index = xla::IndexUtil::MultidimensionalIndexToLinearIndex(
+            result_shape, multi_index);
+        if (linear_index % 1000 == 0) {
+          AS_LOG_INFO << "generating indecies "
+                      << std::vector<int64_t>(multi_index.begin(),
+                                              multi_index.end())
+                      << " / "
+                      << std::vector<int64_t>(result_shape.dimensions().begin(),
+                                              result_shape.dimensions().end())
+                      << std::endl;
+        }
+        func(multi_index);
+      });
+
+  if (log(AS_DEBUG)) {
+    std::stringstream ss;
+    ss << "indicies generated: " << std::endl;
+    for (auto& pair : conv_indices) {
+      ss << "\t" << pair.first << std::endl;
+      ss << "\t" << pair.second << std::endl << std::endl;
+    }
+    AS_LOG_DEBUG << "generated convolution indicies. " << ss.str() << std::endl;
+  }
+  std::cout << "ptxt test " << rhs_v[0] << std::endl;
+  std::cout << "\t" << rhs_v[0]->to_string() << std::endl;
+  AS_LOG_INFO << "generated convolution indicies" << std::endl;
+  // create the result object
+  Layout* layout =
+      createLayout(LAYOUT_TYPE::BATCH, xla_shape_to_shark_shape(hlo->shape()));
+  std::vector<shared_ptr<HECtxt>> result_vector(layout->size() /
+                                                layout->shape()[0]);
+
+  // group by rhs index but keep output index information
+  // this needs a good amount of locking
+
+  // the index into this vector corresponds to the index into the rhs data
+  // each index holds a vector of std::pair<int64_t, int64_t>
+  // pair.first is the output_index and pair.second is the index into the lhs
+  // data. read and write access protect by `rhs_mutex`
+  std::mutex rhs_mutex;
+  std::vector<std::vector<std::pair<int64_t, int64_t>>> rhs_indicies(
+      rhs_v.size());
+
+  size_t result_index = 0;
+  for (auto& pair : conv_indices) {
+    for (size_t i = 0; i < pair.second.size(); ++i) {
+      int64_t lhs_index = pair.first[i];
+      int64_t rhs_index = pair.second[i];
+      rhs_indicies[rhs_index].push_back(
+          std::pair<int64_t, int64_t>(result_index, lhs_index));
+    }
+    ++result_index;
+  }
+  AS_LOG_INFO << "generated rhs first index pairs" << std::endl;
+
+  if (log(AS_DEBUG)) {
+    std::stringstream ss;
+    ss << "pairs generated: " << std::endl;
+    size_t i = 0;
+    for (auto& vec : rhs_indicies) {
+      ss << "\t" << i++ << ": ";
+      for (auto& pair : vec) {
+        ss << "<" << pair.first << ", " << pair.second << "> ";
+      }
+      ss << std::endl;
+    }
+    AS_LOG_DEBUG << ss.str() << std::endl;
+  }
+
+  // the result vector holds a bunch of shared_ptr<HECtxt> objects.
+  // The objects that go into it need to summed up. read and write
+  // access is protected by the `result_mutex`. If the pointer at any
+  // index `i` is not null it is responsiblity of the thread that
+  // wants to write to `i` sum the object there and the object it
+  // wants to write. to do so it must aquire the lock. take the
+  // object out of the list and release the lock. the sumation must
+  // not be performed while holding the lock. a theard can only write
+  // to `i` iff the value at `i` == nullptr and it holds
+  // `result_mutex`
+
+  // create the result object
+  std::mutex result_mutex;
+
+  // create function to perform the actual convolution;
+  auto conv_func = [&rhs_mutex, &result_mutex, &rhs_indicies, &result_vector,
+                    &lhs_v, &rhs_v]() -> bool {
+    // get the index pair and the shared_ptr
+    std::pair<int64_t, int64_t> rhs_pair;
+    shared_ptr<HEPtxt> rhs_ptxt;
+
+    int64_t rhs_index = 0;
+    std::stringstream ss;
+    AS_LOG_DEBUG << "entering first critical section" << std::endl;
+    {  // start rhs_mutex
+      std::lock_guard<std::mutex> lock(rhs_mutex);
+      // find the first non_empty index
+      for (; rhs_index < rhs_indicies.size(); ++rhs_index) {
+        if (!rhs_indicies[rhs_index].empty()) {
+          // take the last element and remove it
+          rhs_pair = std::move(rhs_indicies[rhs_index].back());
+          rhs_indicies[rhs_index].pop_back();
+          break;
+        }
+      }
+      // check if we consumed all items
+      if (rhs_index == rhs_indicies.size()) {
+        AS_LOG_DEBUG
+            << "exiting first critical section and returning. nothing more todo"
+            << std::endl;
+        return false;
+      }
+      rhs_ptxt = rhs_v[rhs_index];
+      // check if we took the last element and if so set the pointer to null
+      if (rhs_indicies[rhs_index].empty()) {
+        rhs_v[rhs_index] = nullptr;
+      }
+    }  // end rhs_mutex
+    AS_LOG_DEBUG << "exiting first critical section: ptxt[ " << rhs_index
+                 << "] " << rhs_ptxt << std::endl;
+
+    // get lhs data  and output index
+    int64_t output_index = rhs_pair.first;
+    int64_t lhs_index = rhs_pair.second;
+    output_index = rhs_pair.first;
+    lhs_index = rhs_pair.second;
+
+    ss << "getting lhs ciphertext" << lhs_index << "/" << lhs_v.size()
+       << std::endl;
+    AS_LOG_DEBUG << ss.str();
+    shared_ptr<HECtxt> lhs_ctxt = lhs_v[lhs_index];
+    ss << "got ctxt " << lhs_ctxt << " at index " << lhs_index << std::endl;
+    AS_LOG_DEBUG << ss.str();
+
+    // run ctxt plaintext multiplication
+    AS_LOG_DEBUG << "running multiplication" << std::endl;
+    std::cout << "ptxt " << rhs_ptxt->to_string() << std::endl;
+    shared_ptr<HECtxt> result = lhs_ctxt->operator*(rhs_ptxt);
+    ss << "multiplication result ctxt " << result << std::endl;
+    AS_LOG_DEBUG << ss.str();
+
+    // write out result
+    // we loop here because other threads might have written a result while we
+    // were busy adding prior results to our result. if that is the case we
+    // need to check again if we can write to the vector
+    while (true) {
+      // first aquire the lock
+      shared_ptr<HECtxt> prior_result;  // to hold values that are allready in
+                                        // the result vector;
+      AS_LOG_DEBUG << "entering second critical section" << std::endl;
+      {  // start result_mutex
+        std::lock_guard<std::mutex> lock(result_mutex);
+        // check if we can just write to result vector
+        if (!result_vector[output_index]) {
+          result_vector[output_index].swap(result);
+          // we are done here
+          AS_LOG_DEBUG << "exiting second critical section and returing"
+                       << std::endl;
+          return true;
+        }
+        // get the pointer of the resulut vector
+        prior_result.swap(result_vector[output_index]);
+        // result_vector[output_index] now holds a nullptr
+      }  // end result_mutex
+      AS_LOG_DEBUG << "exiting second critical section" << std::endl;
+      // perform addition
+      result->addInPlace(prior_result);
+    }
+  };
+
+  // populate the ctxt vector
+  run_parallel(conv_func);
+
+  return Ctxt(result_vector, std::shared_ptr<Layout>(layout),
               "conv(" + lhs.getName() + ")");
 }
 

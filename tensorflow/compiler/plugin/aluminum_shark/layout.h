@@ -211,6 +211,9 @@ class Layout {
   virtual Ctxt pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
                    const xla::Shape& new_shape, double pad_value) const;
 
+  virtual Ctxt convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
+                                        xla::HloInstruction* hlo) const;
+
  protected:
   Shape shape_;
   size_t size_;  // number of total elements
@@ -328,6 +331,9 @@ class BatchLayout : public Layout {
 
   virtual Ctxt convolution(const Ctxt& lhs, const Ptxt& rhs,
                            xla::HloInstruction* hlo) const override;
+
+  Ctxt convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
+                                xla::HloInstruction* hlo) const override;
 
   virtual Ctxt reshape(Ctxt& lhs, const Shape& shape) const;
 
