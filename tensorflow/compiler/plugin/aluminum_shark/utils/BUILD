@@ -24,6 +24,12 @@ cc_library(
 )
 
 cc_library(
+    name = "env_vars",
+    srcs = ["env_vars.cc"],
+    hdrs = ["env_vars.h"],
+)
+
+cc_library(
     name = "exception",
     hdrs = ["exception.h"],
 )
