@@ -143,6 +143,9 @@ class HEContext {
   virtual std::shared_ptr<HEPtxt> createPtxt(
       const std::vector<double>& vec) const = 0;
 
+  virtual std::shared_ptr<HEPtxt> createPtxt(
+      std::vector<double>&& vec) const = 0;
+
   // decoding
   virtual std::vector<long> decodeLong(std::shared_ptr<HEPtxt>) const = 0;
   virtual std::vector<double> decodeDouble(std::shared_ptr<HEPtxt>) const = 0;
