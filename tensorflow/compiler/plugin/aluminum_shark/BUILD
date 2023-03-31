@@ -32,7 +32,10 @@ cc_library(
 
 cc_library(
     name = "layout",
-    srcs = ["layout.cc"],
+    srcs = [
+        "batch_layout.cc",
+        "layout.cc",
+    ],
     hdrs = [
         "base_txt.h",
         "ctxt.h",
