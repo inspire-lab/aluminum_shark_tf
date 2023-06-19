@@ -1,11 +1,13 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/python/python_handle.h"
 
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 
 #include "tensorflow/compiler/plugin/aluminum_shark/python/arg_utils.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/env_vars.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/parallel.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 // #include <mutex>
@@ -377,7 +379,7 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
 
   context->context->startNewGroup("inputs");
 
-  if (parallel) {
+  if (parallel && !aluminum_shark::symbolic_computation) {
     // running multithreaded encryption
     hectxts = std::vector<shared_ptr<aluminum_shark::HECtxt>>(
         ptxt_with_layout.size());
@@ -387,9 +389,19 @@ void* aluminum_shark_encryptDouble(const double* values, int size,
     };
     aluminum_shark::run_parallel(0, ptxt_with_layout.size(), func);
   } else {
-    for (auto& v : ptxt_with_layout) {
+    if (!aluminum_shark::symbolic_computation) {
+      for (auto& v : ptxt_with_layout) {
+        hectxts.push_back(shared_ptr<aluminum_shark::HECtxt>(
+            context->context->encrypt(v, name)));
+      }
+    } else {
       hectxts.push_back(shared_ptr<aluminum_shark::HECtxt>(
-          context->context->encrypt(v, name)));
+          context->context->encrypt(ptxt_with_layout[0], name)));
+      std::ofstream ouputfile;
+      ouputfile.open(aluminum_shark::symbolic_computation_file_name +
+                     "ctxt.txt");
+      ouputfile << "ctxt size: " << hectxts[0]->size();
+      ouputfile.close();
     }
   }
   if (hectxts.size() > 0) {

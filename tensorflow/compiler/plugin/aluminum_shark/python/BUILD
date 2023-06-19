@@ -26,5 +26,6 @@ cc_library(
         "//tensorflow/compiler/plugin/aluminum_shark:logging",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
         "//tensorflow/compiler/plugin/aluminum_shark/utils",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:env_vars",
     ],
 )

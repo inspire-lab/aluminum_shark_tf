@@ -2485,21 +2485,26 @@ class AluminumSharkHloEvaluatorTypedVisitor : public DfsHloVisitorWithDefault {
         << ::aluminum_shark::IterablePrintWrapper<absl::Span<const int64_t>>(
                AsInt64Slice(shape_.dimensions()))
         << std::endl;
-    ShapeUtil::ForEachIndexParallel(
-        shape_, base, /*count=*/AsInt64Slice(shape_.dimensions()), incr,
-        [&](absl::Span<const int64_t> output_index) -> void {
-          auto temp_ctxt = reduce_func(output_index);
-          AS_LOG_DEBUG << "setting pooling result at "
-                       << ::aluminum_shark::IterablePrintWrapper<
-                              absl::Span<const int64_t>>(output_index)
-                       << " layout is " << result_layout->type() << std::endl;
-          result_layout->set(output_index, result_ctxt, temp_ctxt);
-          AS_LOG_DEBUG << "result set" << std::endl;
-        });
+    // if this is a symbolic computation we just skip the actual computation
+    if (!::aluminum_shark::symbolic_computation) {
+      ShapeUtil::ForEachIndexParallel(
+          shape_, base, /*count=*/AsInt64Slice(shape_.dimensions()), incr,
+          [&](absl::Span<const int64_t> output_index) -> void {
+            auto temp_ctxt = reduce_func(output_index);
+            AS_LOG_DEBUG << "setting pooling result at "
+                         << ::aluminum_shark::IterablePrintWrapper<
+                                absl::Span<const int64_t>>(output_index)
+                         << " layout is " << result_layout->type() << std::endl;
+            result_layout->set(output_index, result_ctxt, temp_ctxt);
+            AS_LOG_DEBUG << "result set" << std::endl;
+          });
 
-    // sanity check
-    for (auto& c : result_ctxt.getValue()) {
-      TF_RET_CHECK(c != nullptr);
+      // sanity check
+      for (auto& c : result_ctxt.getValue()) {
+        TF_RET_CHECK(c != nullptr);
+      }
+    } else {
+      result_ctxt.setValue(ctxt->getValue());
     }
     parent_->evaluated_ctxt_[reduce_window] = result_ctxt;
     // evaluated_

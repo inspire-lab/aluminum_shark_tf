@@ -37,9 +37,19 @@ Ctxt Ctxt::deepCopy() const {
 
 const HEContext* Ctxt::getContext() const {
   if (value_.size() == 0) {
+    AS_LOG_INFO << "ciphertext text is empty. returning nullptr context"
+                << std::endl;
     return nullptr;
   }
-  return value_[0]->getContext();
+
+  for (auto& v : value_) {
+    if (v) {
+      return v->getContext();
+    }
+  }
+
+  AS_LOG_INFO << "no valid ciphertexts. returning nullptr context" << std::endl;
+  return nullptr;
 }
 
 // getters and setters

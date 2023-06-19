@@ -173,6 +173,9 @@ class HEPtxt {
 
   virtual std::shared_ptr<HEPtxt> deepCopy() = 0;
 
+  // returns the size of the plaintext in bytes
+  virtual size_t size() = 0;
+
  private:
   friend HEContext;
 };

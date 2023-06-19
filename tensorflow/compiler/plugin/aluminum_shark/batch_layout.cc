@@ -1,5 +1,7 @@
 #include <cstring>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <stdexcept>
 #include <utility>
@@ -9,6 +11,7 @@
 #include "tensorflow/compiler/plugin/aluminum_shark/layout.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/logging.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/ptxt.h"
+#include "tensorflow/compiler/plugin/aluminum_shark/utils/env_vars.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/exception.h"
 #include "tensorflow/compiler/plugin/aluminum_shark/utils/utils.h"
 #include "tensorflow/compiler/xla/index_util.h"
@@ -74,6 +77,9 @@ Shape BatchLayout::get_physical_shape() const {
 
 // Operation Interface
 void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
+  if (symbolic_computation) {
+    return;
+  }
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
   if (one_v.size() != two_v.size()) {
@@ -93,6 +99,9 @@ void BatchLayout::add_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
+  if (symbolic_computation) {
+    return;
+  }
   AS_LOG_INFO << "Ctxt *= Ctxt" << std::endl;
   auto& one_v = one.getValue();
   const auto& two_v = two.getValue();
@@ -116,6 +125,9 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ctxt& two) const {
 }
 
 void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
+  if (symbolic_computation) {
+    return;
+  }
   AS_LOG_INFO << "Ctxt += Ptxt" << std::endl;
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
@@ -139,6 +151,9 @@ void BatchLayout::add_in_place(Ctxt& one, const Ptxt& two) const {
 
 void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
   AS_LOG_INFO << "Ctxt *= Ptxt" << std::endl;
+  if (symbolic_computation) {
+    return;
+  }
   Ptxt copy = two;
   copy.updateLayout(LAYOUT_TYPE::BATCH, one.getContext());
   const auto& two_v = copy.getValue();
@@ -157,24 +172,36 @@ void BatchLayout::multiply_in_place(Ctxt& one, const Ptxt& two) const {
 }
 
 void BatchLayout::add_in_place(Ctxt& one, long two) const {
+  if (symbolic_computation) {
+    return;
+  }
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->addInPlace(two);
   }
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, long two) const {
+  if (symbolic_computation) {
+    return;
+  }
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->multInPlace(two);
   }
 }
 
 void BatchLayout::add_in_place(Ctxt& one, double two) const {
+  if (symbolic_computation) {
+    return;
+  }
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->addInPlace(two);
   }
 }
 
 void BatchLayout::multiply_in_place(Ctxt& one, double two) const {
+  if (symbolic_computation) {
+    return;
+  }
   for (size_t i = 0; i < axis_1_; ++i) {
     one.getValue()[i]->multInPlace(two);
   }
@@ -781,7 +808,7 @@ Ctxt BatchLayout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
     }
   };
 
-  // start the dry and extract the index pairs
+  // start the dry run and extract the index pairs
   std::vector<int64_t> base_vec(result_shape.dimensions_size(), 0);
   std::vector<int64_t> incr_vec(result_shape.dimensions_size(), 1);
   xla::ShapeUtil::ForEachIndexParallel(
@@ -936,6 +963,45 @@ Ctxt BatchLayout::mat_mult_memoptimized(Ctxt& one, Ptxt& two) const {
       result->addInPlace(prior_result);
     }
   };
+
+  // if the execution is symbolic we don't want to do the actual computation
+  if (symbolic_computation) {
+    // but we do want to write to a file:
+    // create filename
+    std::stringstream filename;
+    filename << symbolic_computation_file_name << "dot_" << one.getName()
+             << " X " << two.getName() << ".txt";
+
+    std::ofstream outputfile;
+    outputfile.open(filename.str());
+    // write version
+    outputfile << "version 3\n";
+    outputfile << symbolic_computation_file_name << "\n";
+    // write the shape
+    outputfile << "shapes: " << one.shape() << ", " << two.shape() << "\n";
+    // write the ptxt size estimate:
+    outputfile << "ptxt size: "
+               << (two.getValue().size() == 0 ? 0 : two.getValue()[0]->size())
+               << "\n";
+    // write the index pairs
+    for (auto& pair : dot_indices) {
+      for (size_t i = 0; i < pair.second.size(); ++i) {
+        int64_t lhs_index = pair.first[i];
+        int64_t rhs_index = pair.second[i];
+        outputfile << "(" << lhs_index << "," << rhs_index << ")";
+        if (i != pair.second.size() - 1) {
+          outputfile << ",";
+        }
+      }
+      outputfile << "\n";
+    }
+
+    outputfile.close();
+
+    std::stringstream result_name;
+    result_name << one.getName() << " X " << two.getName();
+    return Ctxt(one.getValue(), result_layout, result_name.str());
+  }
 
   // populate the ctxt vector
   run_parallel(dot_func);
@@ -1322,6 +1388,44 @@ Ctxt BatchLayout::convolution_memoptimized(Ctxt& lhs, Ptxt& rhs,
     }
   };
 
+  // if the execution is symbolic we don't want to do the actual computation
+  if (symbolic_computation) {
+    // but we do want to write to a file:
+    // create filename
+    std::stringstream filename;
+    filename << symbolic_computation_file_name << "conv" << lhs.getName()
+             << " X " << rhs.getName() << ".txt";
+
+    std::ofstream outputfile;
+    outputfile.open(filename.str());
+    outputfile << "version 3\n";
+    outputfile << symbolic_computation_file_name << "\n";
+    // write the shape
+    outputfile << "shapes: " << lhs.shape() << ", " << rhs.shape() << "\n";
+    // writing ptxt size
+    outputfile << "ptxt size: "
+               << (rhs.getValue().size() == 0 ? 0 : rhs.getValue()[0]->size())
+               << "\n";
+
+    // write the index pairs
+    for (auto& pair : conv_indices) {
+      for (size_t i = 0; i < pair.second.size(); ++i) {
+        int64_t lhs_index = pair.first[i];
+        int64_t rhs_index = pair.second[i];
+        outputfile << "(" << lhs_index << "," << rhs_index << ")";
+        if (i != pair.second.size() - 1) {
+          outputfile << ",";
+        }
+      }
+      outputfile << "\n";
+    }
+
+    outputfile.close();
+
+    return Ctxt(lhs.getValue(), std::shared_ptr<Layout>(layout),
+                "conv(" + lhs.getName() + ")");
+  }
+
   // populate the ctxt vector
   run_parallel(conv_func);
 
@@ -1394,22 +1498,26 @@ Ctxt BatchLayout::pad(Ctxt& lhs, const xla::PaddingConfig& pad_config,
   AS_LOG_DEBUG << "Creating dummy shape" << std::endl;
   auto xla_dummy_shape = create_xla_dummy_shape(temp_shape);
   AS_LOG_DEBUG << "Starting iteration:" << std::endl;
-  xla::ShapeUtil::ForEachIndex(xla_dummy_shape, zero_base,
-                               xla::AsInt64Slice(xla_dummy_shape.dimensions()),
-                               step, func);
+  if (!symbolic_computation) {
+    xla::ShapeUtil::ForEachIndex(
+        xla_dummy_shape, zero_base,
+        xla::AsInt64Slice(xla_dummy_shape.dimensions()), step, func);
 
-  // now we need to replace all the null pointers
-  AS_LOG_DEBUG << "Creating padding values:" << std::endl;
-  std::vector<double> pad_vec{pad_value};
-  for (size_t i = 0; i < res_vec.size(); ++i) {
-    if (!res_vec[i]) {
-      AS_LOG_DEBUG << "Creating padding values at:" << i << "/"
-                   << res_vec.size() << std::endl;
-      AS_LOG_DEBUG << "context " << (const void*)(lhs.getContext())
-                   << std::endl;
-      res_vec[i] =
-          shared_ptr<HECtxt>(lhs.getContext()->encrypt(pad_vec, "padding"));
+    // now we need to replace all the null pointers
+    AS_LOG_DEBUG << "Creating padding values:" << std::endl;
+    std::vector<double> pad_vec{pad_value};
+    for (size_t i = 0; i < res_vec.size(); ++i) {
+      if (!res_vec[i]) {
+        AS_LOG_DEBUG << "Creating padding values at:" << i << "/"
+                     << res_vec.size() << std::endl;
+        AS_LOG_DEBUG << "context " << (const void*)(lhs.getContext())
+                     << std::endl;
+        res_vec[i] =
+            shared_ptr<HECtxt>(lhs.getContext()->encrypt(pad_vec, "padding"));
+      }
     }
+  } else {
+    res_vec = lhs.getValue();
   }
   // create and return padded ciphertext
   AS_LOG_DEBUG << "Creating layout" << std::endl;

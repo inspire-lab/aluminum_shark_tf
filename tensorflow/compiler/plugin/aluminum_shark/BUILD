@@ -47,6 +47,7 @@ cc_library(
         ":logging",
         "//tensorflow/compiler/plugin/aluminum_shark/he_backend",
         "//tensorflow/compiler/plugin/aluminum_shark/utils",
+        "//tensorflow/compiler/plugin/aluminum_shark/utils:env_vars",
         "//tensorflow/compiler/plugin/aluminum_shark/utils:exception",
         "//tensorflow/compiler/plugin/aluminum_shark/utils:parallel",
         "//tensorflow/compiler/xla:shape_util",

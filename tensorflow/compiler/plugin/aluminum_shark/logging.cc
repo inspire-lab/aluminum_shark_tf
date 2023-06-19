@@ -64,7 +64,7 @@ NullStream& nullstream() {
 
 static bool init() {
   std::string is_on = log_on ? "ON" : "OFF";
-  std::cout << "ALUMINUM_SHARK_LOGGING is " << is_on << std::endl;
+  // std::cout << "ALUMINUM_SHARK_LOGGING is " << is_on << std::endl;
   AS_LOG("logging works!");
   return true;
 }
