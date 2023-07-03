@@ -176,6 +176,9 @@ class HEPtxt {
   // returns the size of the plaintext in bytes
   virtual size_t size() = 0;
 
+  // returns information about the ptxt
+  virtual std::string info() = 0;
+
  private:
   friend HEContext;
 };
@@ -190,6 +193,9 @@ class HECtxt {
   virtual const HEContext* getContext() const = 0;
 
   virtual std::shared_ptr<HECtxt> deepCopy() = 0;
+
+  // returns information about the ctxt
+  virtual std::string info() = 0;
 
   // arithmetic operations
 
