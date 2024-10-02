@@ -1,3 +1,10 @@
+# About
+
+This is a fork of the official TensorFlow repository. It adds privacy preserving computation.
+For more information check out the main repository for the project https://github.com/inspire-lab/aluminum_shark_tf/
+
+# Original Readme
+
 <div align="center">
   <img src="https://www.tensorflow.org/images/tf_logo_social.png">
 </div>
